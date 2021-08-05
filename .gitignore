@@ -1,0 +1,8 @@
+/Assets/
+build/
+.gradle/
+.idea/
+server/phisap-server
+server/local.properties
+cache
+__pycache__/
