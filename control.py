@@ -1,19 +1,14 @@
 import socket
 import struct
 import subprocess
-import threading
 import time
-
-import av
 
 
 class DeviceController:
     streaming_socket: socket.socket
     controll_socket: socket.socket
     server_process: subprocess.Popen
-    garbage_collector: threading.Thread
     device_size: tuple[int, int]
-    lock: threading.Lock
 
     def __init__(self, port: int = 27183, push_server: bool = True):
         if push_server:
@@ -29,47 +24,9 @@ class DeviceController:
         self.controll_socket, _anydata = skt.accept()
         subprocess.run(['adb', 'reverse', '--remove', 'localabstract:phisap'])
 
-        self.lock = threading.Lock()
-
-        self.collector_running = True
-
-        def collector(lock: threading.Lock):
-            codec = av.CodecContext.create('h264', 'r')
-            last_pixel = None
-            lock.acquire()
-            done = False
-            while self.collector_running:
-                header = self.controll_socket.recv(12)
-                pts, size = struct.unpack('!qI', header)
-                data = self.controll_socket.recv(size)
-                if not done:
-                    packets = codec.parse(data)
-                    for packet in packets:
-                        try:
-                            frames = codec.decode(packet)
-                            for frame in frames:
-                                arr = frame.to_rgb().to_ndarray()
-                                color = arr[0, 0]
-                                if last_pixel is None or (color - last_pixel).all():
-                                    if last_pixel is None:
-                                        last_pixel = color
-                                        continue
-                                    if (color > 230).all():
-                                        lock.release()
-                                        done = True
-                                    last_pixel = color
-                        finally:
-                            pass
-
         _device_name = self.controll_socket.recv(64)
         width, height = struct.unpack('!HH', self.controll_socket.recv(4))
-        self.garbage_collector = threading.Thread(target=collector, args=(self.lock,), daemon=True)
-        self.garbage_collector.start()
         self.device_size = width, height
-
-    def stop_streaming(self):
-        self.controll_socket.send(struct.pack('!b', 11))
-        self.collector_running = False
 
     def touch(self, x: int, y: int, action: int, pressure: int = 0xffff, pointer_id: int = 0xffffffffffffffff):
         self.controll_socket.send(
