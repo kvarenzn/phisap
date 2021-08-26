@@ -44,6 +44,17 @@ python main.py
   + 游戏有时会发生漏判现象。这会导致相同的触摸事件序列在应用于同一谱面时，所得分数并不相同。可能需要多尝试几次才能达到φ的成绩。
 
 
+## 已知的BUG与临时修复方法
+### 游戏设备屏幕的流式传输相关代码会在部分手机上崩溃
+如[issue#3](https://github.com/kvarenzn/phisap/issues/3) 和[issue#5](https://github.com/kvarenzn/phisap/issues/5)
+
+如果遇到这种情况，请尝试使用如下命令切换到`no-streaming`分支，或许可以临时修复：
+```bash
+$ cd phisap  # 进入本项目的根目录
+$ git checkout no-streaming  # 切换分支
+```
+后续的步骤与主分支相同。**如果要使用预编译的服务端，请下载`v0.0.1-beta`版本中附加的`phisap-server`**。
+
 ## 致谢
 + `control.py`和`server/`中的大部分代码参考自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) ，并使用`python`和`kotlin`语言重写。
 + `catalog.py`和`extract.py`中的代码参考自[Perfare/AssetStudio](https://github.com/Perfare/AssetStudio) ，并使用`python`语言重写。
