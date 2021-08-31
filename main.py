@@ -124,6 +124,7 @@ def welcome():
     accept = input('如果同意，请输入"同意"并回车，否则输入其他一切的内容将被视为不同意: ')
     if accept != '同意':
         exit()
+    print('tips: \033[0;31m适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活\033[0m')
     print('''欢迎使用phisap - PHIgros Semi-Auto Player
     
     注意：由于一些限制，目前并不能保证任意一首曲目在每次由本程序
@@ -148,7 +149,20 @@ def welcome():
     ''')
 
 
+def detect_time_limit():
+    # 希望您能严格遵守新规定，如果您擅自修改或去掉这部分代码，
+    # 请您自行承担相关责任
+    import datetime
+    now = datetime.datetime.now()
+    if now.weekday() >= 4 and (datetime.time(20, 0, 0, 0) <= now.time() <= datetime.time(21, 0, 0, 0)):
+        return
+    print('\033[0;31m现在在规定时间之外，本程序将被禁止继续运行。请您严格遵守相关限制！\033[0m')
+    print('规定时间为：每周的五、六、日三天的20:00至21:00')
+    exit()
+
+
 if __name__ == '__main__':
+    detect_time_limit()
     welcome()
     cache = configparser.ConfigParser()
     cache_path = './cache'
