@@ -69,6 +69,16 @@ $ git checkout no-streaming  # 切换分支
 ```
 后续的步骤与主分支相同。**如果要使用预编译的服务端，请下载`v0.0.1-beta`版本中附加的`phisap-server`**。
 
+### 程序在部分旧版本的adb下会阻塞且没有任何额外输出
+如[issue#8](https://github.com/kvarenzn/phisap/issues/8)
+
+这是因为部分旧版本的adb不支持或部分支持`adb reverse`命令。在当前版本下，这个命令是用于服务端(于游戏设备)和客户端(于运行本程序的计算机)之间建立初步通信的重要命令。服务端和客户端之间无法建立通信，导致双方阻塞。本程序在之后的更新中可能会支持`adb forward`命令作为备选通信方案。
+
+要临时解决此问题，请使用最新版本的adb**替换**(不是共存安装)您当前使用的版本。
+
+如果不确定您当前使用的adb版本，请使用`adb version`命令查询。
+
+
 ## 致谢
 + `control.py`和`server/`中的大部分代码参考自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) ，并使用`python`和`kotlin`语言重写。
 + `catalog.py`和`extract.py`中的代码参考自[Perfare/AssetStudio](https://github.com/Perfare/AssetStudio) ，并使用`python`语言重写。
