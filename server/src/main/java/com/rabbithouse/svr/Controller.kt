@@ -38,7 +38,6 @@ class Controller(private val device: Device, private val connection: DesktopConn
             ControlMessage.TYPE_INJECT_TOUCH_EVENT -> if (device.supportsInputEvents()) {
                 injectTouch(msg.action, msg.pointerId, msg.position, msg.pressure, msg.buttons)
             }
-            ControlMessage.TYPE_STOP_VIDEO_STREAMING -> Server.stopStreaming()
             else -> {
             }
         }

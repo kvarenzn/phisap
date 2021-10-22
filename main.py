@@ -14,7 +14,7 @@ from control import DeviceController
 from solve import solve, load_from_json, export_to_json
 
 
-def run(chart_path: str, advance: float):
+def run(chart_path: str, delay: float):
     import time
 
     chart = Chart.from_dict(json.load(open(chart_path)))
@@ -46,12 +46,13 @@ def run(chart_path: str, advance: float):
 
     ctl.tap(device_size[0] // 2, device_size[1] // 2)
 
-    ctl.lock.acquire()
-    ctl.stop_streaming()
     print('[client] INFO: 自动打歌已启动')
+    print(f'[client] INFO: {"提前" if delay < 0 else "等待"}{abs(delay)}秒')
 
-    start_time = time.time() - advance
+    start_time = time.time() + delay
     ans_iter = iter(sorted(ans.items()))
+
+    begin = False
 
     ce_ms, ces = next(ans_iter)
     try:
@@ -59,12 +60,15 @@ def run(chart_path: str, advance: float):
             now = round((time.time() - start_time) * 1000)
             if now >= ce_ms:
                 for ev in ces:
+                    if not begin:
+                        print('[client] INFO: 开始操作')
+                        begin = True
                     ctl.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
                     # print(ev)
                 ce_ms, ces = next(ans_iter)
     except StopIteration:
         print('[client] INFO: 自动打歌已结束')
-        time.sleep(0.5)
+        time.sleep(0.5)  # 等待server退出
 
 
 class BinomialLexer(Lexer):
@@ -143,7 +147,7 @@ def welcome():
         注意：这个值没有大小的限制，且可以为负。可能需要多尝试几次来达到
         最佳效果。
     5. 之后程序会自动解除设备上的暂停并完成这首曲目。如果设备上弹出USB授权
-        对话框，请确认授权，并且重新运行本程序。如果您发现设备上的暂停一直
+        对话框，请确认授权，并重新运行本程序。如果您发现设备上的暂停一直
         未解除，也请尝试重新运行本程序。若仍未成功，则表明本程序不支持您的
         设备。注意：您可以随时按下Ctrl+C终止本程序。
     ''')
@@ -176,11 +180,11 @@ if __name__ == '__main__':
     try:
         cache.getfloat('cache', 'offset')
     except configparser.NoOptionError:
-        cache.set('cache', 'offset', '0.22')
+        cache.set('cache', 'offset', '3.0')
 
     last_offset = cache.getfloat('cache', 'offset')
     select_chart = ask_for_chart()
-    offset = input(f'负时延({last_offset})? ')
+    offset = input(f'时延({last_offset})? ')
     try:
         offset = float(offset)
         cache.set('cache', 'offset', str(offset))
