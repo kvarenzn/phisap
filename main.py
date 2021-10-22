@@ -166,6 +166,7 @@ def detect_time_limit():
 
 
 if __name__ == '__main__':
+    # 您要是实在嫌麻烦，就注释掉/删掉这下面两个函数的调用
     detect_time_limit()
     welcome()
     cache = configparser.ConfigParser()
@@ -180,7 +181,7 @@ if __name__ == '__main__':
     try:
         cache.getfloat('cache', 'offset')
     except configparser.NoOptionError:
-        cache.set('cache', 'offset', '3.0')
+        cache.set('cache', 'offset', '1.95')
 
     last_offset = cache.getfloat('cache', 'offset')
     select_chart = ask_for_chart()

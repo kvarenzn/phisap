@@ -157,12 +157,25 @@ class TypeTreeNode:
 
 class ClassID(Enum):
     OBJECT = 0
+    GAME_OBJECT = 1
+    TRANSFORM = 4
+    MATERIAL = 21
     TEXTURE_2D = 28
+    SHADER = 48
     TEXT_ASSET = 49
+    ANIMATION_CLIP = 74
     AUDIO_CLIP = 83
+    ANIMATOR_CONTROLLER = 91
+    ANIMATOR = 95
     MONO_BEHAVIOUR = 114
+    MONO_SCRIPT = 115
     ASSET_BUNDLE = 142
+    FONT = 128
+    SPRITE_RENDERER = 212
     SPRITE = 213
+    CANVAS_RENDERER = 222
+    CANVAS = 223
+    RECT_TRANSFORM = 224
 
 
 class SerializedType:
@@ -429,6 +442,12 @@ class BundleFile:
 
         self.size, self.compressed_blocks_info_size, self.uncompressed_blocks_info_size, self.flags = unpack('!qIII',
                                                                                                              f.read(20))
+
+        if self.version >= 7:  # align to 16
+            mod = f.tell() % 16
+            if mod != 0:
+                f.seek(16 - mod, io.SEEK_CUR)
+
         compressed_data = f.read(self.compressed_blocks_info_size)
         compression_type = self.flags & 0x3f
         binfo_reader = lz4.block.decompress(compressed_data, uncompressed_size=self.uncompressed_blocks_info_size)
@@ -480,7 +499,6 @@ class BundleFile:
 def load_apk(apk_path: str):
     apk_file = zipfile.ZipFile(apk_path)
     catalog = Catalog(apk_file.open('assets/aa/catalog.json'))
-    print(catalog)
     for file in apk_file.namelist():
         if not file.startswith('assets/aa/Android'):
             continue
@@ -500,5 +518,7 @@ def load_apk(apk_path: str):
 
 
 if __name__ == '__main__':
-    apk_path = input('path: ')
+    apk_path = input('请输入安装包路径: ')
+    print('正在提取谱面数据，请耐心等候')
     load_apk(apk_path)
+    print('提取完成，享受游戏吧')

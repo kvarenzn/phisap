@@ -9,6 +9,7 @@ from chart import Chart
 
 def solve(chart: Chart) -> dict[int, list[TouchEvent]]:
     try:
+        # raise RuntimeError
         res = algo1(chart)
         print('使用算法: algo1')
         return res
