@@ -1,6 +1,7 @@
 import configparser
 import json
 import os
+import sys
 from typing import Callable
 
 from prompt_toolkit import prompt
@@ -12,63 +13,6 @@ from prompt_toolkit.lexers import Lexer
 from chart import Chart
 from control import DeviceController
 from solve import solve, load_from_json, export_to_json
-
-
-def run(chart_path: str, delay: float):
-    import time
-
-    chart = Chart.from_dict(json.load(open(chart_path)))
-
-    ans_file = chart_path + '.ans.json'
-    if os.path.exists(ans_file):
-        print('使用缓存')
-        ans = load_from_json(open(ans_file))
-    else:
-        ans = solve(chart)
-        export_to_json(ans, open(ans_file, 'w'))
-
-    ctl = DeviceController()
-    device_size = ctl.device_size
-
-    height = device_size[1]
-    width = height * 16 // 9
-    xoffset = (device_size[0] - width) // 2
-    yoffset = (device_size[1] - height) // 2
-    scale_factor = height / 720
-
-    for evs in ans.values():
-        for i in range(len(evs)):
-            ev = evs[i]
-            x, y = ev.pos
-            x = xoffset + round(x * scale_factor)
-            y = yoffset + round(y * scale_factor)
-            evs[i] = ev._replace(pos=(x, y))
-
-    ctl.tap(device_size[0] // 2, device_size[1] // 2)
-
-    print('[client] INFO: 自动打歌已启动')
-    print(f'[client] INFO: {"提前" if delay < 0 else "等待"}{abs(delay)}秒')
-
-    start_time = time.time() + delay
-    ans_iter = iter(sorted(ans.items()))
-
-    begin = False
-
-    ce_ms, ces = next(ans_iter)
-    try:
-        while True:
-            now = round((time.time() - start_time) * 1000)
-            if now >= ce_ms:
-                for ev in ces:
-                    if not begin:
-                        print('[client] INFO: 开始操作')
-                        begin = True
-                    ctl.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
-                    # print(ev)
-                ce_ms, ces = next(ans_iter)
-    except StopIteration:
-        print('[client] INFO: 自动打歌已结束')
-        time.sleep(0.5)  # 等待server退出
 
 
 class BinomialLexer(Lexer):
@@ -129,27 +73,12 @@ def welcome():
     if accept != '同意':
         exit()
     print('tips: \033[0;31m适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活\033[0m')
-    print('''欢迎使用phisap - PHIgros Semi-Auto Player
+
+    print(f'''欢迎使用phisap - PHIgros Semi-Auto Player
     
     注意：由于一些限制，目前并不能保证任意一首曲目在每次由本程序
     自动完成时都能达到φ(100%)的成绩。同样也不能保证将来版本的程序
     满足上述要求。
-    
-    使用方法:
-
-    1. 将运行本程序的计算机连接您的安卓设备，并打开设备上的USB调试功能。
-    2. 启动设备上的Phigros，选择您要打的曲目，曲目开始后双击屏幕左上角的
-        暂停按钮暂停游戏。
-    3. 在下方输入您选择的曲目和难度。以后的版本可能会加入自动识别的功能。
-    4. 输入曲目的延时（单位：秒）。由于本程序无法精确获知曲目的开始时机，
-        所以需要一个延时来同步本程序和Phigros的时间。如果您感觉每次程序
-        击打note的时刻均在其到达判定线之前，请减小这个值，否则增大这个值。
-        注意：这个值没有大小的限制，且可以为负。可能需要多尝试几次来达到
-        最佳效果。
-    5. 之后程序会自动解除设备上的暂停并完成这首曲目。如果设备上弹出USB授权
-        对话框，请确认授权，并重新运行本程序。如果您发现设备上的暂停一直
-        未解除，也请尝试重新运行本程序。若仍未成功，则表明本程序不支持您的
-        设备。注意：您可以随时按下Ctrl+C终止本程序。
     ''')
 
 
@@ -169,27 +98,120 @@ if __name__ == '__main__':
     # 您要是实在嫌麻烦，就注释掉/删掉这下面两个函数的调用
     detect_time_limit()
     welcome()
-    cache = configparser.ConfigParser()
-    cache_path = './cache'
 
-    if os.path.exists(cache_path):
-        cache.read(cache_path)
+    adjusting_method = 'delay'
+    if len(sys.argv) > 1:
+        param = sys.argv[1]
+        if param in ['delay', 'tap']:
+            adjusting_method = param
 
-    if not cache.has_section('cache'):
-        cache.add_section('cache')
+    if adjusting_method == 'delay':
+        cache = configparser.ConfigParser()
+        cache_path = './cache'
 
-    try:
-        cache.getfloat('cache', 'offset')
-    except configparser.NoOptionError:
-        cache.set('cache', 'offset', '1.95')
+        if os.path.exists(cache_path):
+            cache.read(cache_path)
 
-    last_offset = cache.getfloat('cache', 'offset')
+        if not cache.has_section('cache'):
+            cache.add_section('cache')
+
+        try:
+            cache.getfloat('cache', 'offset')
+        except configparser.NoOptionError:
+            cache.set('cache', 'offset', '1.95')
+
+        print('请您在游戏设备上选择游玩的曲目，开始游戏后请将游戏暂停，然后在这里继续')
+
+    print('确保您已允许USB调试，如果游戏设备上弹出询问授权的对话框，请允许授权。')
+
     select_chart = ask_for_chart()
-    offset = input(f'时延({last_offset})? ')
-    try:
-        offset = float(offset)
-        cache.set('cache', 'offset', str(offset))
-        cache.write(open(cache_path, 'w'))
-    except ValueError:
-        offset = last_offset
-    run(select_chart, offset)
+
+    if adjusting_method == 'delay':
+        last_offset = cache.getfloat('cache', 'offset')
+        offset = input(f'时延({last_offset})? ')
+        try:
+            offset = float(offset)
+            cache.set('cache', 'offset', str(offset))
+            cache.write(open(cache_path, 'w'))
+        except ValueError:
+            offset = last_offset
+
+    import time
+
+    chart = Chart.from_dict(json.load(open(select_chart)))
+
+    ans_file = select_chart + '.ans.json'
+    if os.path.exists(ans_file):
+        print('使用缓存')
+        ans = load_from_json(open(ans_file))
+    else:
+        ans = solve(chart)
+        export_to_json(ans, open(ans_file, 'w'))
+
+    ctl = DeviceController()
+    device_size = ctl.device_size
+
+    height = device_size[1]
+    width = height * 16 // 9
+    xoffset = (device_size[0] - width) // 2
+    yoffset = (device_size[1] - height) // 2
+    scale_factor = height / 720
+
+    for evs in ans.values():
+        for i in range(len(evs)):
+            ev = evs[i]
+            x, y = ev.pos
+            x = xoffset + round(x * scale_factor)
+            y = yoffset + round(y * scale_factor)
+            evs[i] = ev._replace(pos=(x, y))
+
+    ans_iter = iter(sorted(ans.items()))
+
+    if adjusting_method == 'delay':
+        ctl.tap(device_size[0] // 2, device_size[1] // 2)
+        print('[client] INFO: 自动打歌已启动')
+        print(f'[client] INFO: {"提前" if offset < 0 else "等待"}{abs(offset)}秒')
+
+        start_time = time.time() + offset
+
+        begin = False
+
+        ce_ms, ces = next(ans_iter)
+        try:
+            while True:
+                now = round((time.time() - start_time) * 1000)
+                if now >= ce_ms:
+                    if not begin:
+                        print('[client] INFO: 开始操作')
+                        begin = True
+                    for ev in ces:
+                        ctl.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+                        # print(ev)
+                    ce_ms, ces = next(ans_iter)
+        except StopIteration:
+            print('[client] INFO: 自动打歌已结束')
+            time.sleep(0.5)  # 等待server退出
+
+    elif adjusting_method == 'tap':
+        print('[client] INFO: 自动打歌已就绪，等待您的指示')
+        print('[client] INFO: 请开始游戏，并在第一个音符快落到判定线时，在这里输入两次回车')
+        input()
+        print('[client] INFO: 自动打歌已启动')
+        ce_ms, ces = next(ans_iter)
+        start_time = time.time() - ce_ms / 1000 - 0.01
+
+        for ev in ces:
+            ctl.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+        ce_ms, ces = next(ans_iter)
+
+        try:
+            while True:
+                now = round((time.time() - start_time) * 1000)
+                if now >= ce_ms:
+                    for ev in ces:
+                        ctl.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+                        # print(ev)
+                    ce_ms, ces = next(ans_iter)
+        except StopIteration:
+            print('[client] INFO: 自动打歌已结束')
+            time.sleep(0.5)  # 等待server退出
