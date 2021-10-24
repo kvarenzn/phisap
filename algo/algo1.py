@@ -156,11 +156,8 @@ def solve(chart: Chart) -> dict[int, list[TouchEvent]]:
             sa = math.sin(alpha)
             ca = math.cos(alpha)
             px, py = x + off_x * ca, y + off_x * sa
-            # if not in_rect((px, py), border=0):
-            #     continue
-            if px < 0 or px > 1280 or py < 0 or py > 720:
-                print(f'found: px = {px}, py = {py}')
-                continue
+            # if px < 0 or px > 1280 or py < 0 or py > 720:
+                # continue
 
             if note.typ == Note.TAP:
                 insert(ms, {
