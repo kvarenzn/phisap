@@ -28,7 +28,7 @@
 0. **本程序不支持3.9.0以下的Python，请确保您计算机中安装的Python符合此要求。**
 1. 请安装`requirements.txt`中的全部依赖（使用`pip install -r requirements.txt`）。
 2. 请确保`adb`命令在`PATH`变量中。如果没有请下载安装并配置`PATH`变量。
-3. 请准备Phigros的安装包，目前支持v1.6.9至v2.0.0。如果您的安卓/鸿蒙设备中已经安装有Phigros,则可以依照下面的方法提取：
+3. 请准备Phigros的安装包，目前支持v1.6.9至v2.0.1。如果您的安卓/鸿蒙设备中已经安装有Phigros,则可以依照下面的方法提取：
    1. 将设备连接到安装有`adb`的计算机，且确保设备已开启USB调试模式，且已授权计算机进行调试。
    2. 在计算机上执行命令`adb shell pm path com.PigeonGames.Phigros`，该命令会打印出安装包的路径。
    3. 记上一步得到的路径为`<pkgpath>`(`package:`之后的内容)，执行命令`adb pull <pkgpath> <storage path>`。则安装包将保存到`<storage path>`下（`<storage path>`由您自己指定）。
@@ -83,10 +83,11 @@ python main.py [计时器同步方式]
 下面列出**所有**的会miss的谱面。如果您在使用本程序时遇到了这些情况，属“正常”现象。
 
 括号中的是最好成绩，**仅测试过IN及以上的难度**，不包含曾经的愚人节谱面。
-#### 单曲 精选集 (1S 2V)
+#### 单曲 精选集 (1S 3V)
 + Nhelv (IN: 6 miss)
 + 狂喜蘭舞 (IN: 2 miss)
 + 开心病 (IN: 1 miss)
++ pars/ey (IN: 1 miss)
 #### 过去的章节 (1V)
 + Glaciaxion (IN: 4 miss)
 #### 第七章 时钟链接 (2V)
