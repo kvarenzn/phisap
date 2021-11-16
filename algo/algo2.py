@@ -1,10 +1,14 @@
+"""激进的指针规划算法
+这种算法把hold拆分成一个tap和若干个drag，各自规划
+"""
 import math
 from sys import stdout
 from typing import Optional, Iterator
 
-from .algo_base import TouchAction, TouchEvent
 from chart import Chart
 from note import Note
+from utils import recalc_pos
+from .algo_base import TouchAction, TouchEvent
 
 
 class SimpleNote:
@@ -33,6 +37,7 @@ class Frame:
         self.allocated = [[] for _ in range(4)]
 
     def add(self, note_type: int, pos: tuple[float, float], angle: float):
+        pos = recalc_pos(pos, math.sin(angle), math.cos(angle))
         self.unallocated[note_type - 1].append(SimpleNote(note_type, self.timestamp, pos, angle))
 
     def taps(self) -> Iterator[SimpleNote]:
@@ -209,6 +214,7 @@ def solve(chart: Chart) -> dict[int, list[TouchEvent]]:
                 hold_ms = math.ceil(line.seconds(note.hold) * 1000)
                 frames[ms].add(Note.TAP, pos, alpha)
                 for offset in range(1, hold_ms + 1):
+                    alpha = - line.angle(line.time((ms + offset) / 1000)) * math.pi / 180
                     frames[ms + offset].add(Note.DRAG,
                                             line.pos_of(note, line.time((ms + offset) / 1000)),
                                             alpha)

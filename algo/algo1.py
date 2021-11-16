@@ -1,10 +1,12 @@
+"""保守的指针规划算法"""
+
 import math
 from typing import Any
 
 from .algo_base import TouchAction, TouchEvent
 from chart import Chart
 from note import Note
-from utils import distance_of
+from utils import distance_of, recalc_pos
 
 
 class Pointer:
@@ -146,6 +148,7 @@ def solve(chart: Chart) -> dict[int, list[TouchEvent]]:
             offset * math.pi / 10) * flick_scale_factor * ca
 
     print('正在统计帧...', end='')
+
     # 统计frames
     for line in chart.judge_lines:
         for note in line.notes_above + line.notes_below:
@@ -156,57 +159,55 @@ def solve(chart: Chart) -> dict[int, list[TouchEvent]]:
             sa = math.sin(alpha)
             ca = math.cos(alpha)
             px, py = x + off_x * ca, y + off_x * sa
-            # if px < 0 or px > 1280 or py < 0 or py > 720:
-                # continue
 
             if note.typ == Note.TAP:
                 insert(ms, {
                     'a': 'tap',
-                    'p': (px, py),
+                    'p': recalc_pos((px, py), sa, ca),
                     'i': current_event_id
                 })
             elif note.typ == Note.DRAG:
                 insert(ms, {
                     'a': 'drag',
-                    'p': (px, py),
+                    'p': recalc_pos((px, py), sa, ca),
                     'i': current_event_id
                 })
             elif note.typ == Note.FLICK:
                 insert(ms + flick_start, {
                     'a': 'flick_start',
                     # 'p': flick_pos(*line.pos_of(note, line.time(ms + flick_start) / 1000), flick_start),
-                    'p': flick_pos(px, py, flick_start),
+                    'p': recalc_pos(flick_pos(px, py, flick_start), sa, ca),
                     'i': current_event_id
                 })
                 for offset in range(flick_start + 1, flick_end):
                     insert(ms + offset, {
                         'a': 'flick',
                         # 'p': flick_pos(*line.pos_of(note, line.time(ms + offset) / 1000), offset),
-                        'p': flick_pos(px, py, offset),
+                        'p': recalc_pos(flick_pos(px, py, offset), sa, ca),
                         'i': current_event_id
                     })
                 insert(ms + flick_end, {
                     'a': 'flick_end',
                     # 'p': flick_pos(*line.pos_of(note, line.time(ms + flick_end) / 1000), flick_end),
-                    'p': flick_pos(px, py, flick_end),
+                    'p': recalc_pos(flick_pos(px, py, flick_end), sa, ca),
                     'i': current_event_id
                 })
             elif note.typ == Note.HOLD:
                 hold_ms = math.ceil(line.seconds(note.hold) * 1000)
                 insert(ms, {
                     'a': 'hold_start',
-                    'p': (px, py),
+                    'p': recalc_pos((px, py), sa, ca),
                     'i': current_event_id
                 })
                 for offset in range(1, hold_ms):
                     insert(ms + offset, {
                         'a': 'hold',
-                        'p': line.pos_of(note, line.time((ms + offset) / 1000)),
+                        'p': recalc_pos(line.pos_of(note, line.time((ms + offset) / 1000)), sa, ca),
                         'i': current_event_id
                     })
                 insert(ms + hold_ms, {
                     'a': 'hold_end',
-                    'p': line.pos_of(note, line.time((ms + hold_ms) / 1000)),
+                    'p': recalc_pos(line.pos_of(note, line.time((ms + hold_ms) / 1000)), sa, ca),
                     'i': current_event_id
                 })
             current_event_id += 1
