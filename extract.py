@@ -9,8 +9,6 @@ import lz4.block
 import lz4.frame
 import lz4.stream
 
-import zipfile
-
 from utils import read_string_end_with_nil
 
 from catalog import Catalog
@@ -496,29 +494,5 @@ class BundleFile:
                     self.objects.append(TextAsset(io.BytesIO(reader.read())))
 
 
-def load_apk(apk_path: str):
-    apk_file = zipfile.ZipFile(apk_path)
-    catalog = Catalog(apk_file.open('assets/aa/catalog.json'))
-    for file in apk_file.namelist():
-        if not file.startswith('assets/aa/Android'):
-            continue
-        b = BundleFile(apk_file.open(file))
-        basename = file[18:]
-        if len(b.objects) == 2 and any(isinstance(obj, TextAsset) for obj in b.objects):
-            container = next(filter(lambda o: isinstance(o, AssetBundle), b.objects))
-            text = next(filter(lambda o: isinstance(o, TextAsset), b.objects))
-            filename = next(iter(container.container.keys()))
-            if not filename.startswith('Assets/'):
-                filename = catalog.fname_map[basename]
-            basedir = os.path.dirname(filename)
-            if basedir and not os.path.exists(basedir):
-                os.makedirs(basedir)
-            with open(filename, 'w') as out:
-                out.write(text.text)
-
-
 if __name__ == '__main__':
-    apk_path = input('请输入安装包路径: ')
-    print('正在提取谱面数据，请耐心等候')
-    load_apk(apk_path)
-    print('提取完成，享受游戏吧')
+    pass
