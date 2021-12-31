@@ -1,5 +1,4 @@
 import io
-import os
 from enum import Enum
 from math import ceil
 from struct import unpack
@@ -10,8 +9,6 @@ import lz4.frame
 import lz4.stream
 
 from utils import read_string_end_with_nil
-
-from catalog import Catalog
 
 COMMON_STRINGS = {
     0: 'AABB',

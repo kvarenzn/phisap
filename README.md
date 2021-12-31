@@ -1,12 +1,3 @@
-## 暂停更新至2022/01/01
-由于项目作者学业方面任务繁重，一段时间内无暇维护本项目。
-
-（其实在大更新之前也没啥可以更的了，大更新现在也没空做，现在这个项目又不是不能用）
-
-项目现在支持到游戏版本2.0.1。不排除存档期间内可能追随游戏新版本的发布而进行一些局部的适配修改。
-
-
-
 # phisap - PHIgros Semi-Auto Player
 适用于音游Phigros的半自动打歌器，**仅支持安卓/鸿蒙设备**。
 
@@ -18,10 +9,18 @@
 ## 灵感来源
 > tips: sudo 板子自己打歌
 
+## 成果展示（雾）
+
+![截图1](./screenshots/phone-shot1.jpg)
+
+![截图2](./screenshots/phone-shot2.jpg)
+
+![截图3](./screenshots/phone-shot3.jpg)
 
 ## 如何使用
+
 ### 准备
-0. **本程序不支持3.9.0以下的Python，请确保您计算机中安装的Python符合此要求。**
+0. **请安装Python 3.10。**
 1. 请安装`requirements.txt`中的全部依赖（使用`pip install -r requirements.txt`）。
 2. 请确保`adb`命令在`PATH`变量中。如果没有请下载安装并配置`PATH`变量。
 3. 请准备Phigros的安装包，目前支持v1.6.9至v2.0.1。如果您的安卓/鸿蒙设备中已经安装有Phigros,则可以依照下面的方法提取：
