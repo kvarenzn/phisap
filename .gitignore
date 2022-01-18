@@ -2,7 +2,7 @@
 build/
 .gradle/
 .idea/
-server/phisap-server
-server/local.properties
+server.jar
 cache
+scrcpy-server-*
 __pycache__/
