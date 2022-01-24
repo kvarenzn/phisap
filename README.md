@@ -24,7 +24,7 @@
 0. **请安装Python 3.10。**
 1. `pip install -r requirements.txt`。
 2. 请安装`Android Debug Bridge`，**要求版本号至少高于`1.0.41`**，并确保相应的环境变量已经配置好。
-3. 请准备Phigros的游戏安装包。目前支持v1.6.9至v2.1.0。
+3. 请准备Phigros的游戏安装包。目前支持v1.6.9至v2.1.1。
 4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v1.21`，下载后请**直接**放到本项目的根文件夹下。
 
 ### 运行
@@ -34,6 +34,7 @@ python main.py
 
 ### 运行截图
 ![截图1](./screenshots/shot1.png)
+(好丑，下次更新用PySide2重写一下界面罢)
 
 ## 注意事项
 + 本程序**不依赖**root权限工作。
