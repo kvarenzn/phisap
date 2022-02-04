@@ -2,10 +2,12 @@
 适用于音游Phigros的半自动打歌器，**仅支持安卓/鸿蒙设备**。
 
 ## 免责声明
-**本项目属于个人兴趣项目，与厦门鸽游网络公司无关。**\
-**项目的服务端借用自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)。**\
-**您因使用或修改本程序所造成的一切后果由您自己承担。**\
-包括但不限于：失去游玩的乐趣、被其他人辱骂或被官方删除在线存档或帐号等。因此，请酌情使用。
++ 本项目属于个人兴趣项目，与厦门鸽游网络公司无关。
++ 项目的服务端借用自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)。
++ **您因使用或修改本程序所造成的一切后果由您自己承担。**
++ 截止目前，项目作者从未在任何除github以外的平台上以任何方式宣传过本项目，**但并不代表以后不会。**
++ **请不要在各大视频网站以任何正面或负面的方式宣传本项目。**
++ **项目作者(kvarenzn)保留本项目所有权及对项目内所有内容的最终解释权。**
 
 ## 灵感来源
 > tips: sudo 板子自己打歌
@@ -25,7 +27,7 @@
 1. `pip install -r requirements.txt`。
 2. 请安装`Android Debug Bridge`，**要求版本号至少高于`1.0.41`**，并确保相应的环境变量已经配置好。
 3. 请准备Phigros的游戏安装包。目前支持v1.6.9至v2.1.1。
-4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v1.21`，下载后请**直接**放到本项目的根文件夹下。
+4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v1.21`，下载后请**直接**放到本项目的根文件夹下(文件的全名就叫`scrcpy-server-v1.21`，一定不要改成别的名称！！)。
 
 ### 运行
 ```bash

@@ -13,8 +13,9 @@ class DeviceController:
     device_size: tuple[int, int]
     collector_running: bool
 
-    def __init__(self, port: int = 27183, push_server: bool = True):
-        server_file = next(filter(lambda p: p.startswith('scrcpy-server-v'), os.listdir()))
+    def __init__(self, port: int = 27183, push_server: bool = True, server_dir: str = '.'):
+        server_file = next(filter(lambda p: p.startswith('scrcpy-server-v'), os.listdir(server_dir)))
+        server_file = os.path.join(server_dir, server_file)
         server_version = server_file.split('v')[-1]
         if push_server:
             subprocess.run(['adb', 'push', server_file, '/data/local/tmp/scrcpy-server.jar'])
