@@ -1,14 +1,14 @@
-import io
-from enum import Enum
-from math import ceil
-from struct import unpack
-from typing import IO, NamedTuple, TypeVar, Generic, Any
+import os.path
+import pathlib
+from enum import Enum, auto
+from typing import TypeVar, Generic, Any, IO, Optional
 
 import lz4.block
 import lz4.frame
 import lz4.stream
+from PIL import Image
 
-from utils import read_string_end_with_nil
+from binary_reader import BinaryReader
 
 COMMON_STRINGS = {
     0: 'AABB',
@@ -123,31 +123,23 @@ COMMON_STRINGS = {
 }
 
 
-class StorageBlock(NamedTuple):
-    uncompressed_size: int
-    compressed_size: int
-    flags: int
-
-
-class Node(NamedTuple):
-    offset: int
-    size: int
-    flags: int
-    path: str
-
-
 class TypeTreeNode:
     type_: str
     name: str
     byte_size: int
     index: int
-    is_array: bool
+    type_flags: int
     version: int
     meta_flag: int
     level: int
     type_str_offset: int
     name_str_offset: int
     ref_type_hash: int
+
+
+class TypeTree:
+    nodes: list[TypeTreeNode]
+    string_buffer: bytes
 
 
 class ClassID(Enum):
@@ -177,43 +169,13 @@ class SerializedType:
     class_id: ClassID
     is_stripped_type: bool
     script_type_index: int
-    nodes: list[TypeTreeNode]
+    type_tree: TypeTree
     script_id: bytes
     old_type_hash: bytes
     type_dependencies: list[int]
-
-    def __init__(self, reader: IO):
-        class_id, self.is_stripped_type, self.script_type_index = unpack('<ibh', reader.read(7))
-        self.class_id = ClassID(class_id)
-        if self.class_id == ClassID.MONO_BEHAVIOUR:
-            self.script_id = reader.read(16)
-        self.old_type_hash = reader.read(16)
-        number_of_nodes, string_buffer_size = unpack('<ii', reader.read(8))
-        self.nodes = []
-        for _ in range(number_of_nodes):
-            node = TypeTreeNode()
-            node.version, node.level, node.is_array, \
-            node.type_str_offset, node.name_str_offset, \
-            node.byte_size, node.index, node.meta_flag, \
-            node.ref_type_hash = unpack('<HbbIIiiiQ', reader.read(32))
-            self.nodes.append(node)
-        string_buf = io.BytesIO(reader.read(string_buffer_size))
-
-        def read_string(offset: int) -> str:
-            if offset & 0x80000000 == 0:
-                string_buf.seek(offset)
-                return read_string_end_with_nil(string_buf)
-            offset = offset & 0x7fffffff;
-            return COMMON_STRINGS.get(offset, str(offset))
-
-        for node in self.nodes:
-            node.type_ = read_string(node.type_str_offset)
-            node.name = read_string(node.name_str_offset)
-
-        type_dependencies_len, = unpack('<I', reader.read(4))
-        self.type_dependencies = []
-        for i in range(type_dependencies_len):
-            self.type_dependencies.append(*unpack('<i', reader.read(4)))
+    class_name: str
+    namespace: str
+    asm_name: str
 
 
 class ObjectInfo:
@@ -222,7 +184,9 @@ class ObjectInfo:
     type_id: int
     class_id: ClassID
     path_id: int
-    serialized_type: SerializedType
+    serialized_type: SerializedType | None = None
+    is_destroyed: int
+    stripped: bool
 
 
 class LocalSerializedObjectIdentifier:
@@ -237,104 +201,373 @@ class FileIdentifier:
 
 
 class SerializedFile:
-    metadata_size: int
-    file_size: int
-    version: int
-    data_offset: int
-    big_endian: bool
+    class FileHeader:
+        metadata_size: int
+        file_size: int
+        version: int
+        data_offset: int
+        big_endian: bool
+        reserved_bytes: bytes
+
+    assets_manager: 'AssetsManager'
+    path: pathlib.Path
+    file_header: FileHeader
+    file_big_endian: bool
     unity_version: str
+    version: list[int]
     target_platform: int
     enable_type_tree: bool
     types: list[SerializedType]
+    big_id_enabled: bool
     object_infos: list[ObjectInfo]
     script_types: list[LocalSerializedObjectIdentifier]
     externals: list[FileIdentifier]
     ref_types: list[SerializedType]
-    reader: IO
+    user_information: str
+    objects: list['Object']
+    object_map: dict[int, 'Object']
+    parent: Optional['BundleFile']
 
-    @classmethod
-    def is_serialized_file(cls, content: bytes) -> bool:
-        if len(content) < 20:
-            return False
-        reader = io.BytesIO(content)
+    def __init__(self, reader: 'FileReader', assets_manager: 'AssetsManager', parent: Optional['BundleFile'] = None):
+        self.assets_manager = assets_manager
+        self.reader = reader
+        self.path = reader.path
+        self.parent = parent
+        self.file_header = self.FileHeader()
+        self.file_header.metadata_size = reader.u32
+        self.file_header.file_size = reader.u32
+        self.file_header.version = reader.u32
+        self.file_header.data_offset = reader.u32
 
-        _, file_size, version, data_offset = unpack('!IIII', reader.read(16))
-        reader.seek(4, io.SEEK_CUR)  # skip endianess and reversed
-        if version >= 22:
-            if file_size < 48:
-                return False
-            _, file_size, data_offset = unpack('<IQQ', reader.read(20))
-        if file_size != len(content) or data_offset > file_size:
-            return False
+        # header
+        if self.file_header.version >= 9:
+            self.file_header.big_endian = reader.bool
+            self.file_header.reserved_bytes = reader.read(3)
+            self.file_big_endian = self.file_header.big_endian
+        else:
+            reader.pos = self.file_header.file_size - self.file_header.metadata_size
+            self.file_big_endian = reader.bool
 
-        return True
+        if self.file_header.version >= 22:
+            self.file_header.metadata_size = reader.u32
+            self.file_header.file_size = reader.u64
+            self.file_header.data_offset = reader.u64
+            reader.skip(8)
 
-    def __init__(self, content: bytes):
-        reader = io.BytesIO(content)
+        # metadata
+        if not self.file_big_endian:
+            reader.big_endian = False
 
-        self.metadata_size, self.file_size, self.version, self.data_offset = unpack('!IIII', reader.read(16))
-        self.big_endian = bool(reader.read(1)[0])
-        reader.seek(3, 1)  # reserved
-        self.unity_version = read_string_end_with_nil(reader)
-        self.target_platform, self.enable_type_tree = unpack('<ib', reader.read(5))
-        self.enable_type_tree = bool(self.enable_type_tree)
+        if self.file_header.version >= 7:
+            self.unity_version = reader.cstr()
+            self.set_version(self.unity_version)
 
-        type_count, = unpack('i', reader.read(4))
+        if self.file_header.version >= 8:
+            self.target_platform = reader.i32
+
+        self.enable_type_tree = True
+        if self.file_header.version >= 13:
+            self.enable_type_tree = reader.bool
+
+        # types
+        types_count = reader.i32
         self.types = []
-        for _ in range(type_count):
-            self.types.append(SerializedType(reader))
+        for _ in range(types_count):
+            self.types.append(self._read_serialized_type(reader, False))
 
-        # read objects
-        object_count, = unpack('<i', reader.read(4))
+        self.big_id_enabled = False
+        if 7 <= self.file_header.version < 14:
+            self.big_id_enabled = bool(reader.i32)
+
+        # objects
+        object_count = reader.i32
         self.object_infos = []
         for _ in range(object_count):
             obj_info = ObjectInfo()
 
-            reader.seek(ceil(reader.tell() / 4) * 4)  # align stream with alignment 4
-            obj_info.path_id, obj_info.byte_start, obj_info.byte_size, obj_info.type_id = unpack('<qIIi',
-                                                                                                 reader.read(20))
-            obj_info.byte_start += self.data_offset
-            obj_info.serialized_type = self.types[obj_info.type_id]
-            obj_info.class_id = obj_info.serialized_type.class_id
+            if self.big_id_enabled:
+                obj_info.path_id = reader.i64
+            elif self.file_header.version < 14:
+                obj_info.path_id = reader.i32
+            else:
+                reader.align(4)
+                obj_info.path_id = reader.i64
+
+            if self.file_header.version >= 22:
+                obj_info.byte_start = reader.i64
+            else:
+                obj_info.byte_start = reader.u32
+
+            obj_info.byte_start += self.file_header.data_offset
+            obj_info.byte_size = reader.u32
+            obj_info.type_id = reader.i32
+
+            if self.file_header.version < 16:
+                obj_info.class_id = reader.u16
+                obj_info.serialized_type = next(filter(lambda x: x.class_id == obj_info.type_id, self.types))
+            else:
+                t = self.types[obj_info.type_id]
+                obj_info.serialized_type = t
+                obj_info.class_id = t.class_id
+
+            if self.file_header.version < 11:
+                obj_info.is_destroyed = reader.u16
+
+            if 11 <= self.file_header.version < 17:
+                script_type_index = reader.i16
+                if obj_info.serialized_type is not None:
+                    obj_info.serialized_type.script_type_index = script_type_index
+
+            if self.file_header.version == 15 or self.file_header.version == 16:
+                obj_info.stripped = reader.bool
 
             self.object_infos.append(obj_info)
 
-        # read scripts
-        script_count, = unpack('<i', reader.read(4))
-        self.script_types = []
-        for _ in range(script_count):
-            script_type = LocalSerializedObjectIdentifier()
-            script_type.local_serializerd_file_index, = unpack('<i', reader.read(4))
+        # scripts
+        if self.file_header.version >= 11:
+            script_count = reader.i32
+            self.script_types = []
 
-            reader.seek(ceil(reader.tell() / 4) * 4)  # align stream with alignment
-            script_type.local_identifier_in_file, = unpack('<q', reader.read(8))
+            for _ in range(script_count):
+                script_type = LocalSerializedObjectIdentifier()
+                script_type.local_serializerd_file_index = reader.i32
 
-            self.script_types.append(script_type)
+                if self.file_header.version < 14:
+                    script_type.local_identifier_in_file = reader.i32
+                else:
+                    reader.align(4)
+                    script_type.local_identifier_in_file = reader.i64
+
+                self.script_types.append(script_type)
 
         # externals
-        external_count, = unpack('<i', reader.read(4))
+        external_count = reader.i32
         self.externals = []
         for _ in range(external_count):
             external = FileIdentifier()
-            read_string_end_with_nil(reader)
-            external.guid = reader.read(16)
-            external.type, = unpack('<i', reader.read(4))
-            external.path_name = read_string_end_with_nil(reader)
+            if self.file_header.version >= 6:
+                reader.cstr()
+
+            if self.file_header.version >= 5:
+                external.guid = reader.read(16)
+                external.type = reader.i32
+
+            external.path_name = reader.cstr()
             self.externals.append(external)
 
         # ref types
-        ref_type_count, = unpack('<i', reader.read(4))
-        self.ref_types = [SerializedType(reader) for _ in range(ref_type_count)]
+        if self.file_header.version >= 20:
+            self.ref_types = [self._read_serialized_type(reader, True) for _ in range(reader.i32)]
+
+        if self.file_header.version >= 5:
+            self.user_information = reader.cstr()
+
+        self.objects = []
+        self.object_map = {}
 
         self.reader = reader
 
+    def _read_serialized_type(self, reader: BinaryReader, is_ref_type: bool) -> SerializedType:
+        t = SerializedType()
+        t.class_id = ClassID(reader.i32)
 
-class NamedObject:
+        version = self.file_header.version
+        if version >= 16:
+            t.is_stripped_type = reader.bool
+
+        if version >= 17:
+            t.script_type_index = reader.u16
+
+        if version >= 13:
+            if is_ref_type and t.script_type_index >= 0:
+                t.script_id = reader.read(16)
+            elif (version < 16 and t.class_id.value < 0) or (
+                    version >= 16 and t.class_id == t.class_id == ClassID.MONO_BEHAVIOUR):
+                t.script_id = reader.read(16)
+            t.old_type_hash = reader.read(16)
+
+        if self.enable_type_tree:
+            t.type_tree = TypeTree()
+            t.type_tree.nodes = []
+            if version >= 12 or version == 10:
+                nodes_count = reader.i32
+                length = reader.i32
+
+                for _ in range(nodes_count):
+                    node = TypeTreeNode()
+                    node.version = reader.u16
+                    node.level = reader.u8
+                    node.type_flags = reader.u8
+                    node.type_str_offset = reader.u32
+                    node.name_str_offset = reader.u32
+                    node.byte_size = reader.i32
+                    node.index = reader.i32
+                    node.meta_flag = reader.i32
+
+                    if version >= 19:
+                        node.ref_type_hash = reader.u64
+                    t.type_tree.nodes.append(node)
+
+                t.type_tree.string_buffer = reader.read(length)
+
+                with BinaryReader(t.type_tree.string_buffer) as buf_reader:
+                    def read_string(offset: int) -> str:
+                        if offset & 0x80000000 == 0:
+                            buf_reader.pos = offset
+                            return buf_reader.cstr()
+                        offset = offset & 0x7fffffff
+                        return COMMON_STRINGS.get(offset, str(offset))
+
+                    for node in t.type_tree.nodes:
+                        node.type_ = read_string(node.type_str_offset)
+                        node.name = read_string(node.name_str_offset)
+
+            else:
+                nodes = t.type_tree.nodes
+
+                def read_type_tree(level: int = 0):
+                    nd = TypeTreeNode()
+                    nodes.append(nd)
+                    nd.level = level
+                    nd.type_ = reader.cstr()
+                    nd.name = reader.cstr()
+                    nd.byte_size = reader.i32
+
+                    if version == 2:
+                        reader.skip(4)
+
+                    if version == 3:
+                        nd.index = reader.i32
+
+                    nd.type_flags = reader.i32
+                    nd.version = reader.i32
+
+                    if version != 3:
+                        nd.meta_flag = reader.i32
+
+                    for _ in range(reader.i32):
+                        read_type_tree(level + 1)
+
+                read_type_tree(0)
+
+            if version >= 21:
+                if is_ref_type:
+                    t.class_name = reader.cstr()
+                    t.namespace = reader.cstr()
+                    t.asm_name = reader.cstr()
+                else:
+                    t.type_dependencies = [reader.i32 for _ in range(reader.u32)]
+
+        return t
+
+    def add_object(self, obj: 'Object'):
+        self.objects.append(obj)
+        self.object_map[obj.path_id] = obj
+
+    def set_version(self, unity_version: str):
+        self.version = []
+        for sp in unity_version.split('.'):
+            try:
+                self.version.append(int(sp))
+            except ValueError:
+                pass
+
+
+class ResourceReader:
+    need_search: bool
+    path: str
+    asset_file: SerializedFile
+    offset: int
+    size: int
+    reader: BinaryReader
+
+    def __init__(self, reader: BinaryReader, offset: int, size: int):
+        self.reader = reader
+        self.offset = offset
+        self.size = size
+
+    @classmethod
+    def search(cls, path: str, asset_file: SerializedFile, offset: int, size: int) -> 'ResourceReader':
+        resource_file_name = pathlib.Path(path).name
+        if resource_file_name in asset_file.assets_manager.resource_file_readers:
+            return ResourceReader(asset_file.assets_manager.resource_file_readers[resource_file_name], offset, size)
+        assets_file_directory = asset_file.path.parent
+        resource_file_path = assets_file_directory / resource_file_name
+        if not resource_file_path.exists():
+            raise RuntimeError(f'{resource_file_path} not exists')
+        if resource_file_path.exists():
+            raise RuntimeError(f'{resource_file_path} exists')
+
+    def get(self) -> bytes:
+        self.reader.pos = self.offset
+        return self.reader.read(self.size)
+
+
+class ObjectReader(BinaryReader):
+    asset_file: SerializedFile
+    path_id: int
+    byte_start: int
+    byte_size: int
+    class_id: ClassID
+    serialized_type: SerializedType
+    version: list[int]
+    platform: int
+    format_version: int
+
+    def __init__(self, reader: BinaryReader, asset_file: SerializedFile, object_info: ObjectInfo):
+        super().__init__(reader._stream)
+        self.big_endian = reader.big_endian
+        self.asset_file = asset_file
+        self.path_id = object_info.path_id
+        self.byte_start = object_info.byte_start
+        self.byte_size = object_info.byte_size
+        self.class_id = object_info.class_id
+        self.serialized_type = object_info.serialized_type
+        self.platform = asset_file.target_platform
+        self.version = asset_file.version
+        self.format_version = asset_file.file_header.version
+
+
+class Object:
+    asset_file: SerializedFile
+    reader: ObjectReader
+    path_id: int
+    version: list[int]
+    platform: int
+    class_id: ClassID
+    serialized_type: SerializedType
+    byte_size: int
+
+    def __init__(self, reader: ObjectReader):
+        self.reader = reader
+        reader.pos = reader.byte_start
+        self.asset_file = reader.asset_file
+        self.class_id = reader.class_id
+        self.path_id = reader.path_id
+        self.version = reader.version
+        self.platform = reader.target_platform
+        self.serialized_type = reader.serialized_type
+        self.byte_size = reader.byte_size
+
+        if self.platform == -2:
+            _object_hide_flags = reader.u32
+
+
+class EditorExtension(Object):
+
+    def __init__(self, reader: ObjectReader):
+        super().__init__(reader)
+        if self.platform == -2:
+            _prefab_parent_object = PPtr[EditorExtension](reader)
+            _prefab_internal = PPtr[Object](reader)
+
+
+class NamedObject(EditorExtension):
     name: str
 
-    def __init__(self, reader: IO):
-        self.name = reader.read(unpack('<i', reader.read(4))[0]).decode()
-        reader.seek(ceil(reader.tell() / 4) * 4)
+    def __init__(self, reader: ObjectReader):
+        super().__init__(reader)
+        self.name = reader.aligned_string()
 
 
 T = TypeVar('T')
@@ -344,20 +577,43 @@ class PPtr(Generic[T]):
     file_id: int
     path_id: int
 
-    assets_file: SerializedFile
-    index: int
+    asset_file: SerializedFile
+    index: int = -2
 
-    def __init__(self, reader: IO):
-        self.file_id, self.path_id = unpack('<iq', reader.read(12))
+    def __init__(self, reader: ObjectReader):
+        self.file_id = reader.i32
+        self.path_id = reader.i32 if reader.format_version < 14 else reader.i64
+        self.asset_file = reader.asset_file
+
+    def get_asset_file(self) -> SerializedFile | None | list[SerializedFile]:
+        if self.file_id == 0:
+            return self.asset_file
+        if self.file_id > 0 and self.file_id - 1 < len(self.asset_file.externals):
+            manager = self.asset_file.assets_manager
+
+            if self.index == -2:
+                external = self.asset_file.externals[self.file_id - 1]
+                name = external.path_name
+                if name not in manager.asset_file_index_cache:
+                    index = manager.asset_files.index(
+                        next(filter(lambda x: x.path.name.upper() == name.upper(), manager.asset_files)))
+                    manager.asset_file_index_cache[name] = index
+
+            if self.index >= 0:
+                return manager.asset_files[self.index]
+
+    def deref(self) -> T:
+        if source_file := self.get_asset_file():
+            if self.path_id in source_file.object_map:
+                return source_file.object_map[self.path_id]
 
 
 class TextAsset(NamedObject):
     text: str
 
-    def __init__(self, reader: IO):
+    def __init__(self, reader: ObjectReader):
         super().__init__(reader)
-        length, = unpack('<i', reader.read(4))
-        self.text = reader.read(length).decode()
+        self.text = reader.str(reader.i32)
 
     def __repr__(self):
         return f'TextAsset(text={repr(self.text)})'
@@ -366,32 +622,25 @@ class TextAsset(NamedObject):
 class AssetInfo:
     preload_index: int
     preload_size: int
-    asset: PPtr[Any]
+    asset: PPtr[Object]
 
-    def __init__(self, reader: IO):
-        self.preload_index, self.preload_size = unpack('<ii', reader.read(8))
-        self.asset = PPtr(reader)
+    def __init__(self, reader: ObjectReader):
+        self.preload_index = reader.i32
+        self.preload_size = reader.i32
+        self.asset = PPtr[Object](reader)
 
 
 class AssetBundle(NamedObject):
-    preload_table: list[PPtr[Any]]
+    preload_table: list[PPtr[Object]]
     container: dict[str, AssetInfo]
 
-    def __init__(self, reader: IO):
+    def __init__(self, reader: ObjectReader):
         super().__init__(reader)
         # preload table
-        size, = unpack('<i', reader.read(4))
-        self.preload_table = []
-        for _ in range(size):
-            self.preload_table.append(PPtr(reader))
+        self.preload_table = [PPtr[Object](reader) for _ in range(reader.i32)]
 
         # container
-        size, = unpack('<i', reader.read(4))
-        self.container = {}
-        for _ in range(size):
-            key = reader.read(unpack('<i', reader.read(4))[0]).decode()
-            reader.seek(ceil(reader.tell() / 4) * 4)
-            self.container[key] = AssetInfo(reader)
+        self.container = {reader.aligned_string(): AssetInfo(reader) for _ in range(reader.i32)}
 
 
 class RectF:
@@ -400,95 +649,657 @@ class RectF:
     width: float
     height: float
 
-    def __init__(self, reader: IO):
-        self.x, self.y, self.width, self.height = unpack('<ffff', reader.read(16))
+    def __init__(self, reader: BinaryReader):
+        self.x = reader.f32
+        self.y = reader.f32
+        self.width = reader.f32
+        self.height = reader.f32
+
+
+class Texture(NamedObject):
+
+    def __init__(self, reader: ObjectReader):
+        super().__init__(reader)
+        version = reader.version
+        if version >= [2017, 3]:
+            _forced_fallback_format = reader.i32
+            _downscale_fallback = reader.bool
+            if version >= [2020, 2]:
+                _is_alpha_channel_optional = reader.bool
+            reader.align(4)
+
+
+class Texture2D(Texture):
+    class TextureFormat(Enum):
+        Alpha8 = 1
+        ARGB4444 = auto()
+        RGB24 = auto()
+        RGBA32 = auto()
+        ARGB32 = auto()
+        RGB565 = 7
+        R16 = 9
+        DXT1 = auto()
+        DXT5 = 12
+        RGBA4444 = auto()
+        BGRA32 = auto()
+        RHalf = auto()
+        RGHalf = auto()
+        RGBAHalf = auto()
+        RFloat = auto()
+        RGFloat = auto()
+        RGBAFloat = auto()
+        YUY2 = auto()
+        RGB9e5Float = auto()
+        BC4 = 26
+        BC5 = auto()
+        BC6H = 24
+        BC7 = auto()
+        DXT1Crunched = 28
+        DXT5Crunched = auto()
+        PVRTC_RGB2 = auto()
+        PVRTC_RGBA2 = auto()
+        PVRTC_RGB4 = auto()
+        PVRTC_RGBA4 = auto()
+        ETC_RGB4 = auto()
+        ATC_RGB4 = auto()
+        ATC_RGBA8 = auto()
+        EAC_R = 41
+        EAC_R_SIGNED = auto()
+        EAC_RG = auto()
+        EAC_RG_SIGNED = auto()
+        ETC2_RGB = auto()
+        ETC2_RGBA1 = auto()
+        ETC2_RGBA8 = auto()
+        ASTC_RGB_4x4 = auto()
+        ASTC_RGB_5x5 = auto()
+        ASTC_RGB_6x6 = auto()
+        ASTC_RGB_8x8 = auto()
+        ASTC_RGB_10x10 = auto()
+        ASTC_RGB_12x12 = auto()
+        ASTC_RGBA_4x4 = auto()
+        ASTC_RGBA_5x5 = auto()
+        ASTC_RGBA_6x6 = auto()
+        ASTC_RGBA_8x8 = auto()
+        ASTC_RGBA_10x10 = auto()
+        ASTC_RGBA_12x12 = auto()
+        ETC_RGB4_3DS = auto()
+        ETC_RGBA8_3DS = auto()
+        RG16 = auto()
+        R8 = auto()
+        ETC_RGB4Crunched = auto()
+        ETC2_RGBA8Crunched = auto()
+        ASTC_HDR_4x4 = auto()
+        ASTC_HDR_5x5 = auto()
+        ASTC_HDR_6x6 = auto()
+        ASTC_HDR_8x8 = auto()
+        ASTC_HDR_10x10 = auto()
+        ASTC_HDR_12x12 = auto()
+        RG32 = auto()
+        RGB48 = auto()
+        RGBA64 = auto()
+
+    class StreamingInfo:
+        offset: int
+        size: int
+        path: str
+
+        def __init__(self, reader: ObjectReader):
+            version = reader.version
+            if version >= [2020]:
+                self.offset = reader.i64
+            else:
+                self.offset = reader.u32
+            self.size = reader.u32
+            self.path = reader.aligned_string()
+
+    class GLTextureSettings:
+
+        filter_mode: int
+        aniso: int
+        mip_bias: float
+        wrap_mode: int
+
+        def __init__(self, reader: ObjectReader):
+            version = reader.version
+            self.filter_mode = reader.i32
+            self.aniso = reader.i32
+            self.mip_bias = reader.f32
+            if version >= [2017]:
+                self.wrap_mode = reader.i32
+                _wrap_v = reader.i32
+                _wrap_w = reader.i32
+            else:
+                self.wrap_mode = reader.i32
+
+    class Decoder:
+
+        @staticmethod
+        def decode_etc2_block():
+            pass
+
+        @staticmethod
+        def decode_etc2a8_block(data: bytes) -> bytes:
+            pass
+
+        @staticmethod
+        def decode_etc2a8(data: bytes, width: int, height: int) -> bytes:
+            results = bytearray()
+            reader = BinaryReader(data)
+            num_blocks_x = (width + 3) // 4
+            num_blocks_y = (height + 3) // 4
+            for by in range(num_blocks_y):
+                for bx in range(num_blocks_x):
+                    _d1 = reader.read(4)
+                    _d2 = reader.read(4)
+            return results
+
+    width: int
+    height: int
+    texture_format: TextureFormat
+    mipmap: bool
+    mip_count: int
+    texture_settings: GLTextureSettings
+    image_data: bytes
+    stream_data: StreamingInfo | None
+
+    def __init__(self, reader: ObjectReader):
+        super().__init__(reader)
+        version = reader.version
+        self.width = reader.i32
+        self.height = reader.i32
+        _complete_image_size = reader.i32
+        if version >= [2020]:
+            _mips_stripped = reader.i32
+
+        self.texture_format = self.TextureFormat(reader.i32)
+
+        if version <= [5, 2]:
+            self.mipmap = reader.bool
+        else:
+            self.mip_count = reader.i32
+
+        if version >= [2, 6]:
+            _is_readable = reader.bool
+
+        if version >= [2020]:
+            _is_pre_processed = reader.bool
+
+        if version >= [2019, 3]:
+            _ignore_master_texture_limit = reader.bool
+
+        if [3] <= version <= [5, 4]:
+            _read_allowed = reader.bool
+
+        if version >= [2018, 2]:
+            _streaming_mipmaps = reader.bool
+        reader.align(4)
+        if version >= [2018, 2]:
+            _streaming_mipmaps_priority = reader.i32
+
+        _image_count = reader.i32
+        _texture_dimension = reader.i32
+
+        self.texture_settings = self.GLTextureSettings(reader)
+
+        if version >= [3]:
+            _lightmap_format = reader.i32
+
+        if version >= [3, 5]:
+            _colorspace = reader.i32
+
+        if version >= [2020, 2]:
+            _platform_blob = reader.read(reader.i32)
+            reader.align(4)
+
+        image_data_size = reader.i32
+        self.stream_data = None
+        if image_data_size == 0 and version >= [5, 3]:
+            self.stream_data = self.StreamingInfo(reader)
+
+        if self.stream_data and self.stream_data.path:
+            self.image_data = ResourceReader.search(self.stream_data.path, self.asset_file, self.stream_data.offset,
+                                                    self.stream_data.size).get()
+        else:
+            self.image_data = reader.read(image_data_size)
+
+    def get_image(self) -> Image.Image | None:
+        match self.texture_format:
+            case self.TextureFormat.RGB24:
+                return Image.frombytes('RGB', (self.width, self.height), self.image_data).transpose(1)
+            case self.TextureFormat.RGBA32:
+                return Image.frombytes('RGBA', (self.width, self.height), self.image_data).transpose(1)
+
+
+class Font(NamedObject):
+    font_data: bytes
+
+    def __init__(self, reader: ObjectReader):
+        super().__init__(reader)
+
+        if self.version >= [5, 5]:
+            _line_spacing = reader.f32
+            _default_material = PPtr[Object](reader)
+            _font_size = reader.f32
+            _texture = PPtr[Texture](reader)
+            _ascii_start_offset = reader.i32
+            _tracking = reader.f32
+            _character_spacing = reader.i32
+            _character_padding = reader.i32
+            _convert_case = reader.i32
+            _character_rects_size = reader.i32
+
+            reader.skip(44 * _character_rects_size)
+            _kerning_values_size = reader.i32
+            reader.skip(8 * _kerning_values_size)
+            _pixel_scale = reader.f32
+            _font_data_size = reader.i32
+
+            if _font_data_size > 0:
+                self.font_data = reader.read(_font_data_size)
+        else:
+            _ascii_start_offset = reader.i32
+
+            if self.version <= [3]:
+                _font_count_x = reader.i32
+                _font_count_y = reader.i32
+
+            _kerning = reader.f32
+            _line_spacing = reader.f32
+
+            if self.version <= [3]:
+                for _ in range(reader.i32):
+                    _first = reader.i32
+                    _second = reader.f32
+            else:
+                _character_spacing = reader.i32
+                _character_padding = reader.i32
+
+            _convert_case = reader.i32
+            _default_material = PPtr[Object](reader)
+
+            for _ in range(reader.i32):
+                _index = reader.i32
+
+                _uvx = reader.f32
+                _uvy = reader.f32
+                _uvwidth = reader.f32
+                _uvheight = reader.f32
+
+                _vertx = reader.f32
+                _verty = reader.f32
+                _vertwidth = reader.f32
+                _vertheight = reader.f32
+                _width = reader.f32
+
+                if self.version >= [4]:
+                    _flipped = reader.bool
+                    reader.align(4)
+
+            _texture = PPtr[Texture](reader)
+
+            for _ in range(reader.i32):
+                _pair_first = reader.u16
+                _pair_second = reader.u16
+                _second = reader.f32
+
+            if self.version <= [3]:
+                _grid_font = reader.bool
+                reader.align(4)
+            else:
+                _pixel_scale = reader.f32
+
+            _font_data_size = reader.i32
+            if _font_data_size > 0:
+                self.font_data = reader.read(_font_data_size)
+
+
+class Vector2:
+    x: float
+    y: float
+
+    def __init__(self, x: float, y: float):
+        self.x = x
+        self.y = y
+
+    @classmethod
+    def read(cls, reader: BinaryReader) -> 'Vector2':
+        return cls(reader.f32, reader.f32)
+
+
+class Vector4:
+    x: float
+    y: float
+    z: float
+    w: float
+
+    def __init__(self, x: float, y: float, z: float, w: float):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.w = w
+
+    @classmethod
+    def read(cls, reader: BinaryReader) -> 'Vector4':
+        return cls(reader.f32, reader.f32, reader.f32, reader.f32)
 
 
 class Sprite(NamedObject):
     rect: RectF
+    offset: Vector2
+    border: Vector4
+    pixels_to_units: float
+    pivot: Vector2
+    extrude: int
+    is_polygon: bool
+    render_data_key: tuple[bytes, int]
+    atlas_tags: list[str]
+    sprite_atlas: PPtr[Object]
+    render_data: Any
+    physics_shape: list[list[Vector2]]
 
-    def __init__(self, reader: IO):
+    def __init__(self, reader: ObjectReader):
         super().__init__(reader)
         self.rect = RectF(reader)
+        self.offset = Vector2.read(reader)
+        if self.version >= [4, 5]:
+            self.border = Vector4.read(reader)
+        self.pixels_to_units = reader.f32
+        self.pivot = Vector2(0, 0)
+        if self.version >= [5, 4, 1]:
+            self.pivot = Vector2.read(reader)
+        self.extrude = reader.u32
+        if self.version >= [5, 3]:
+            self.is_polygon = reader.bool
+            reader.align(4)
+        if self.version >= [2017]:
+            self.render_data_key = (reader.read(16), reader.i64)
+            self.atlas_tags = [reader.aligned_string() for _ in reader.i32]
+            self.sprite_atlas = PPtr[Object](reader)
+
+        pass
+
+        if self.version >= [2017]:
+            self.physics_shape = [[Vector2.read(reader) for __ in range(reader.i32)] for _ in range(reader.i32)]
+
+
+class StreamFile:
+    path: str
+    stream: bytes
+
+
+class FileReader(BinaryReader):
+    GZIP_MAGIC = b'\x1f\x8b'
+    BROTLI_MAGIC = b'brotli'
+    ZIP_MAGIC = b'PK\x03\x04'
+    ZIP_SPANNED_MAGIC = b'PK\x07\x08'
+
+    class FileType(Enum):
+        BundleFile = 0
+        WebFile = 1
+        GZipFile = 2
+        BrotliFile = 3
+        AssetsFile = 4
+        ZipFile = 5
+        ResourceFile = 6
+
+    path: pathlib.Path
+    file_type: FileType
+
+    def __init__(self, stream: IO[bytes] | bytes | bytearray, path: str | pathlib.Path):
+        super().__init__(stream)
+        self.path = pathlib.Path(path)
+        self.file_type = self.check_file_type()
+
+    def check_file_type(self) -> FileType:
+        signature = self.bcstrl(20)
+        self.pos = 0
+        match signature:
+            case b'UnityWeb' | b'UnityRaw' | b'UnityArchive' | b'UnityFS':
+                return self.FileType.BundleFile
+            case b'UnityWebData1.0':
+                return self.FileType.WebFile
+            case _:
+                magic = self.read(2)
+                if magic == self.GZIP_MAGIC:
+                    return self.FileType.GZipFile
+                self.pos = 0x20
+                magic = self.read(6)
+                if magic == self.BROTLI_MAGIC:
+                    return self.FileType.BrotliFile
+                self.pos = 0
+                if self.is_serialized_file():
+                    return self.FileType.AssetsFile
+                self.pos = 0
+                magic = self.read(4)
+                if magic == self.ZIP_MAGIC or magic == self.ZIP_SPANNED_MAGIC:
+                    return self.FileType.ZipFile
+                return self.FileType.ResourceFile
+
+    def is_serialized_file(self) -> bool:
+        length = len(self)
+
+        if length < 20:
+            return False
+
+        self.skip(4)
+        file_size = self.u32
+        version = self.u32
+        data_offset = self.u32
+
+        self.skip(4)
+
+        if version >= 22:
+            if file_size < 48:
+                return False
+            self.skip(4)
+            file_size = self.u64
+            data_offset = self.u64
+
+        if file_size != length or data_offset > file_size:
+            return False
+
+        return True
 
 
 class BundleFile:
-    signature: str
-    version: int
-    unity_version: str
-    unity_revision: str
+    class Header:
+        signature: str
+        version: int
+        unity_version: str
+        unity_revision: str
+        size: int
+        compressed_blocks_info_size: int
+        uncompressed_blocks_info_size: int
+        flags: int
 
-    size: int
-    compressed_blocks_info_size: int
-    uncompressed_blocks_info_size: int
-    flags: int
+    class StorageBlock:
+        compressed_size: int
+        uncompressed_size: int
+        flags: int
 
+    class Node:
+        offset: int
+        size: int
+        flags: int
+        path: str
+
+    header: Header
     blocks_info: list[StorageBlock]
     directory_info: list[Node]
-    files: list[SerializedFile]
+    files: list[StreamFile | SerializedFile]
+    reader: FileReader
 
-    objects: list[NamedObject]
+    def __init__(self, reader: FileReader):
+        self.reader = reader
+        self.header = self.Header()
+        self.header.signature = reader.cstr()
+        self.header.version = reader.u32
+        self.header.unity_version = reader.cstr()
+        self.header.unity_revision = reader.cstr()
 
-    def __init__(self, f: IO):
-        self.signature = read_string_end_with_nil(f)
-        self.version, = unpack('!I', f.read(4))
-        self.unity_version = read_string_end_with_nil(f)
-        self.unity_revision = read_string_end_with_nil(f)
+        signature = self.header.signature
 
-        self.size, self.compressed_blocks_info_size, self.uncompressed_blocks_info_size, self.flags = unpack('!qIII',
-                                                                                                             f.read(20))
+        if signature == 'UnityArchive':
+            raise RuntimeError('not supported')
+        elif signature in ['UnityWeb', 'UnityRaw'] and self.header.version != 6:
+            raise RuntimeError('not supported')
+        elif signature == 'UnityFS' or (signature in ['UnityWeb', 'UnityRaw'] and self.header.version == 6):
+            self.header.size = reader.i64
+            self.header.compressed_blocks_info_size = reader.u32
+            self.header.uncompressed_blocks_info_size = reader.u32
+            self.header.flags = reader.u32
+            if signature != 'UnityFS':
+                reader.skip(1)
 
-        if self.version >= 7:  # align to 16
-            mod = f.tell() % 16
-            if mod != 0:
-                f.seek(16 - mod, io.SEEK_CUR)
+            if self.header.version >= 7:
+                reader.align(16)
 
-        compressed_data = f.read(self.compressed_blocks_info_size)
-        compression_type = self.flags & 0x3f
-        binfo_reader = lz4.block.decompress(compressed_data, uncompressed_size=self.uncompressed_blocks_info_size)
-        binfo_reader = io.BytesIO(binfo_reader)
-        uncompressed_data_hash = binfo_reader.read(16)
-
-        blocks_info_count, = unpack('!i', binfo_reader.read(4))
-        self.blocks_info = [StorageBlock(*unpack('!IIH', binfo_reader.read(10))) for _ in range(blocks_info_count)]
-
-        nodes_count, = unpack('!i', binfo_reader.read(4))
-        self.directory_info = [Node(*unpack('!qqI', binfo_reader.read(20)), read_string_end_with_nil(binfo_reader)) for
-                               _ in range(nodes_count)]
-
-        blocks = bytes()
-        for block in self.blocks_info:
-            compress_method = block.flags & 0x3f
-            if compress_method == 0:  # raw data without compression
-                blocks += f.read(block.compressed_size)
-            elif compress_method == 1:  # 7zip
-                print(f'7zip compression method not supported now, file {f.name} used this method')
-            elif compress_method in (2, 3):  # LZ4 or LZMA
-                blocks += lz4.block.decompress(f.read(block.compressed_size), uncompressed_size=block.uncompressed_size)
+            if self.header.flags & 0x80:
+                position = reader.pos
+                reader.pos = -self.header.compressed_blocks_info_size
+                block_info_bytes = reader.read(self.header.compressed_blocks_info_size)
+                reader.pos = position
             else:
-                print(f'unknown compression method: {compress_method} in file {f.name}')
-        block_stream = io.BytesIO(blocks)
+                block_info_bytes = reader.read(self.header.compressed_blocks_info_size)
 
-        self.files = []
-        for node in self.directory_info:
-            block_stream.seek(node.offset)
-            content = block_stream.read(node.size)
-            if SerializedFile.is_serialized_file(content):
-                self.files.append(SerializedFile(content))
+            uncompressed_size = self.header.uncompressed_blocks_info_size
+
+            match self.header.flags & 0x3F:
+                case 1:  # LZMA
+                    raise RuntimeError('sorry, dont support LZMA compress')
+                case 2 | 3:  # LZ4 | LZ4HC
+                    uncompressed_data = lz4.block.decompress(block_info_bytes, uncompressed_size=uncompressed_size)
+                    if len(uncompressed_data) != uncompressed_size:
+                        raise RuntimeError('lz4 decompression error: size not correct')
+                case _:
+                    uncompressed_data = bytes(block_info_bytes)
+
+            with BinaryReader(uncompressed_data) as uc_reader:
+                _uncompressed_data_hash = uc_reader.read(16)
+                self.blocks_info = []
+                for _ in range(uc_reader.i32):
+                    block = self.StorageBlock()
+                    block.uncompressed_size = uc_reader.u32
+                    block.compressed_size = uc_reader.u32
+                    block.flags = uc_reader.u16
+                    self.blocks_info.append(block)
+
+                self.directory_info = []
+                for _ in range(uc_reader.i32):
+                    node = self.Node()
+                    node.offset = uc_reader.i64
+                    node.size = uc_reader.i64
+                    node.flags = uc_reader.u32
+                    node.path = uc_reader.cstr()
+                    self.directory_info.append(node)
+
+            block_stream = bytearray()
+
+            for block in self.blocks_info:
+                match block.flags & 0x3f:
+                    case 1:  # LZMA
+                        raise RuntimeError('LZMA unsupported')
+                    case 2 | 3:  # LZ4 | LZ4HC
+                        block_stream.extend(lz4.block.decompress(reader.read(block.compressed_size),
+                                                                 uncompressed_size=block.uncompressed_size))
+                    case _:  # raw
+                        block_stream.extend(reader.read(block.compressed_size))
+
+            with BinaryReader(block_stream) as s_reader:
+                self.files = []
+                for node in self.directory_info:
+                    file = StreamFile()
+                    file.path = node.path
+                    s_reader.pos = node.offset
+                    file.stream = s_reader.read(node.size)
+                    self.files.append(file)
+
+
+class AssetsManager:
+    asset_files: list[SerializedFile]
+    asset_file_hashes: list[str]
+    resource_file_readers: dict[str, BinaryReader]
+    asset_file_index_cache: dict[str, int]
+
+    def __init__(self):
+        self.asset_files = []
+        self.asset_file_hashes = []
+        self.resource_file_readers = {}
+        self.asset_file_index_cache = {}
+
+    def load_file(self, file: IO[bytes] | FileReader):
+        if not isinstance(file, FileReader):
+            file = FileReader(file, file.name)
+        if file.file_type == FileReader.FileType.BundleFile:
+            self.load_bundle(file)
+
+    def load_bundle(self, reader: FileReader, original_path: pathlib.Path | None = None):
+        bundle_file = BundleFile(reader)
+        for file in bundle_file.files:
+            subreader = FileReader(file.stream, reader.path.parent / pathlib.Path(file.path).name)
+            subreader.pos = 0
+            if subreader.file_type == FileReader.FileType.AssetsFile:
+                self.load_assets(subreader, original_path or reader.path, bundle_file.header.unity_revision, bundle_file)
             else:
-                pass
+                self.resource_file_readers[os.path.basename(file.path)] = subreader
 
-        self.objects = []
-        for file in self.files:
-            reader = file.reader
-            for obj_info in file.object_infos:
-                reader.seek(obj_info.byte_start)
-                if obj_info.class_id == ClassID.OBJECT:
-                    pass
-                elif obj_info.class_id == ClassID.ASSET_BUNDLE:
-                    self.objects.append(AssetBundle(io.BytesIO(reader.read())))
-                elif obj_info.class_id == ClassID.TEXT_ASSET:
-                    self.objects.append(TextAsset(io.BytesIO(reader.read())))
+    def load_assets(self, reader: FileReader, original_path: pathlib.Path, unity_version: str, bundle_file: BundleFile):
+        if reader.path.name not in self.asset_file_hashes:
+            asset_file = SerializedFile(reader, self, bundle_file)
+            asset_file.original_path = original_path
+            if not unity_version and asset_file.file_header.version < 7:
+                asset_file.set_version(unity_version)
+            self.asset_files.append(asset_file)
+            self.asset_file_hashes.append(asset_file.path.name)
+
+    def read_assets(self):
+        for asset_file in self.asset_files:
+            for object_info in asset_file.object_infos:
+                with ObjectReader(asset_file.reader, asset_file, object_info) as obj_reader:
+                    obj = None
+                    match obj_reader.class_id:
+                        case ClassID.ASSET_BUNDLE:
+                            obj = AssetBundle(obj_reader)
+                        case ClassID.TEXT_ASSET:
+                            obj = TextAsset(obj_reader)
+                        case ClassID.SPRITE:
+                            pass
+                        case ClassID.TEXTURE_2D:
+                            obj = Texture2D(obj_reader)
+                        case ClassID.AUDIO_CLIP:
+                            pass
+                        case ClassID.MONO_SCRIPT:
+                            pass
+                        case ClassID.MONO_BEHAVIOUR:
+                            pass
+                        case ClassID.TRANSFORM:
+                            pass
+                        case ClassID.GAME_OBJECT:
+                            pass
+                        case ClassID.CANVAS:
+                            pass
+                        case ClassID.CANVAS_RENDERER:
+                            pass
+                        case ClassID.RECT_TRANSFORM:
+                            pass
+                        case ClassID.ANIMATION_CLIP:
+                            pass
+                        case ClassID.MATERIAL:
+                            pass
+                        case ClassID.ANIMATOR_CONTROLLER:
+                            pass
+                        case ClassID.ANIMATOR:
+                            pass
+                        case ClassID.SPRITE_RENDERER:
+                            pass
+                        case ClassID.SHADER:
+                            pass
+                        case ClassID.FONT:
+                            obj = Font(obj_reader)
+                        case _:
+                            obj = Object(obj_reader)
+                    if obj:
+                        asset_file.add_object(obj)
 
 
 if __name__ == '__main__':

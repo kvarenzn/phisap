@@ -16,7 +16,7 @@ class Catalog:
 
         self.buckets = []
         bds = data['m_BucketDataString']
-        reader = BinaryReader(BytesIO(b64decode(bds)))
+        reader = BinaryReader(BytesIO(b64decode(bds)), False)
         bucket_count = reader.u32
         for _ in range(bucket_count):
             self.buckets.append({
@@ -26,13 +26,13 @@ class Catalog:
 
         self.keys = []
         kds = data['m_KeyDataString']
-        reader = BinaryReader(BytesIO(b64decode(kds)))
+        reader = BinaryReader(BytesIO(b64decode(kds)), False)
         key_count = reader.u32
         for _ in range(key_count):
             self.keys.append(self.read_object(reader))
 
-        eds = BinaryReader(BytesIO(b64decode(data['m_EntryDataString'])))
-        xds = BinaryReader(BytesIO(b64decode(data['m_ExtraDataString'])))
+        eds = BinaryReader(BytesIO(b64decode(data['m_EntryDataString'])), False)
+        xds = BinaryReader(BytesIO(b64decode(data['m_ExtraDataString'])), False)
         entry_count = eds.u32
         self.entries = []
         iids = data['m_InternalIds']
@@ -94,7 +94,3 @@ class Catalog:
 
 
 __all__ = ['Catalog']
-
-if __name__ == '__main__':
-    with open('catalog.json') as f:
-        catalog = Catalog(f)

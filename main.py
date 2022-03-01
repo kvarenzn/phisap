@@ -9,49 +9,47 @@ from typing import Optional
 from catalog import Catalog
 from chart import Chart
 from control import DeviceController
-from extract import TextAsset, AssetBundle, BundleFile
+from extract import AssetsManager, Texture2D, TextAsset
 from solve import load_from_json, export_to_json
 
 
 def extract_apk():
     apk_path = filedialog.askopenfilename(filetypes=[('安装包', '.apk')], title='请选择要解包的游戏安装包')
+    if not apk_path:
+        return
     popup = Toplevel()
     popup.title('正在解包，请稍候...')
     popup.minsize(300, 60)
     popup.resizable(False, False)
-    progress = DoubleVar()
-    progress_bar = ttk.Progressbar(popup, variable=progress, maximum=100)
-    progress_bar.pack(anchor='center', expand=1)
-    progress_val = StringVar()
-    progress_lbl = ttk.Label(popup, textvariable=progress_val)
-    progress_lbl.pack()
-
     popup.pack_slaves()
+    popup.update()
 
     apk_file = zipfile.ZipFile(apk_path)
     catalog = Catalog(apk_file.open('assets/aa/catalog.json'))
-    total = len(apk_file.namelist())
-    counter = 0
+    manager = AssetsManager()
     for file in apk_file.namelist():
-        popup.update()
-        progress.set(counter * 100 / total)
-        progress_val.set(f'{counter * 100 / total:.02f}%')
-        counter += 1
         if not file.startswith('assets/aa/Android'):
             continue
-        b = BundleFile(apk_file.open(file))
-        basename = file[18:]
-        if len(b.objects) == 2 and any(isinstance(obj, TextAsset) for obj in b.objects):
-            container = next(filter(lambda o: isinstance(o, AssetBundle), b.objects))
-            text = next(filter(lambda o: isinstance(o, TextAsset), b.objects))
-            filename = next(iter(container.container.keys()))
-            if not filename.startswith('Assets/'):
-                filename = catalog.fname_map[basename]
-            basedir = os.path.dirname(filename)
-            if basedir and not os.path.exists(basedir):
-                os.makedirs(basedir)
-            with open(filename, 'w') as out:
-                out.write(text.text)
+        with apk_file.open(file) as f:
+            manager.load_file(f)
+    manager.read_assets()
+    for file in manager.asset_files:
+        filepath = file.parent.reader.path
+        if filepath.name not in catalog.fname_map:
+            continue
+        asset_name = catalog.fname_map[filepath.name]
+        if not asset_name.startswith('Assets/'):
+            continue
+        basedir = os.path.dirname(asset_name)
+        if basedir and not os.path.exists(basedir):
+            os.makedirs(basedir)
+
+        for obj in file.objects:
+            if isinstance(obj, TextAsset):
+                with open(asset_name, 'w') as out:
+                    out.write(obj.text)
+            elif isinstance(obj, Texture2D):
+                obj.get_image().save(asset_name)
 
     popup.destroy()
 
