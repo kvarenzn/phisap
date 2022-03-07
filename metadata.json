@@ -1,0 +1,108 @@
+{
+	"chapters": [
+		{
+			"id": "Single",
+			"short": "Single",
+			"name": "单曲 精选集",
+			"songs": [
+				
+			]
+		},
+		{
+			"id": "MainStoryLegacy",
+			"short": "Legacy",
+			"name": "过去的章节",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "MainStory4",
+			"short": "Chapter 4",
+			"name": "管道迷宫",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "MainStory5",
+			"short": "Chapter 5",
+			"name": "霓虹灯牌",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "MainStory6",
+			"short": "Chapter 6",
+			"name": "霓虹灯牌",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "MainStory7",
+			"short": "Chapter 7",
+			"name": "时钟链接",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "SideStory1",
+			"short": "Side Story 1",
+			"name": "忘忧宫",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "KALPA",
+			"short": "KALPA",
+			"name": "KALPA 精选集",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "MUSEDASH",
+			"short": "Muse Dash",
+			"name": "Muse Dash 精选集",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "WAVEAT",
+			"short": "WAVEAT",
+			"name": "WAVEAT 精选集",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "Good",
+			"short": "GOOD",
+			"name": "GOOD 精选集",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "HyuN",
+			"short": "HyuN",
+			"name": "HyuN 精选集",
+			"songs": [
+
+			]
+		},
+		{
+			"id": "RST",
+			"short": "Rising Sun Traxx",
+			"name": "Rising Sun Traxx",
+			"songs": [
+
+			]
+		}
+	]
+}

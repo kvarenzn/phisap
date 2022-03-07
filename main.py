@@ -171,7 +171,10 @@ class ChapterModel(QAbstractListModel):
 
 def chapters_model_callback(_engine):
     my_model = ChapterModel()
-    my_model.load_chapters()
+    try:
+        my_model.load_chapters()
+    except Exception as e:
+        print(e)
     return my_model
 
 
