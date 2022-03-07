@@ -1259,7 +1259,8 @@ class AssetsManager:
                     obj = None
                     match obj_reader.class_id:
                         case ClassID.ASSET_BUNDLE:
-                            obj = AssetBundle(obj_reader)
+                            # obj = AssetBundle(obj_reader)
+                            pass
                         case ClassID.TEXT_ASSET:
                             obj = TextAsset(obj_reader)
                         case ClassID.SPRITE:

@@ -94,3 +94,9 @@ class Catalog:
 
 
 __all__ = ['Catalog']
+
+if __name__ == '__main__':
+    with open('catalog.json') as f:
+        catalog = Catalog(f)
+        import json
+        print(json.dumps(catalog.entries))
