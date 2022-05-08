@@ -6,3 +6,4 @@ server.jar
 cache
 scrcpy-server-*
 __pycache__/
+venv/
