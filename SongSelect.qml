@@ -108,7 +108,7 @@ Item {
 
 			MouseArea {
 				anchors.fill: parent
-				onClick: {
+				onClicked: {
 					backPressed()
 				}
 			}
