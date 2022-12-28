@@ -64,9 +64,11 @@ def agreement():
 
 class App(ttk.Frame):
     cache: Optional[configparser.ConfigParser]
+    controller: DeviceController | None
 
     def __init__(self, master: Tk):
         super().__init__(master)
+        self.controller = None
         self.cache_path = None
         self.running = True
         self.start_time = 0.0
@@ -264,9 +266,13 @@ class App(ttk.Frame):
                 import algo.algo2
                 ans = algo.algo2.solve(chart)
                 export_to_json(ans, open(ans_file, 'w'))
+            else:
+                raise RuntimeError(f'unknown algo_method: {algo_method}')
 
-            ctl = DeviceController()
-            device_size = ctl.device_size
+            if self.controller is None:
+                self.controller = DeviceController()
+
+            device_size = self.controller.device_size
 
             height = device_size[1]
             width = height * 16 // 9
@@ -294,7 +300,7 @@ class App(ttk.Frame):
             delay_offset.set(0)
 
             if self.sync_mode.get() == 0:
-                ctl.tap(device_size[0] // 2, device_size[1] // 2)
+                self.controller.tap(device_size[0] // 2, device_size[1] // 2)
                 offset = self.delay.get()
 
                 self.info_label['text'] = '准备就绪'
@@ -309,10 +315,10 @@ class App(ttk.Frame):
                 self.delay_input['state'] = 'normal'
                 self.delay_input['textvariable'] = delay_offset
 
-                def incremented(event):
+                def incremented(_):
                     self.start_time += 0.01
 
-                def decremented(event):
+                def decremented(_):
                     self.start_time -= 0.01
 
                 self.delay_input.bind('<<Increment>>', incremented)
@@ -333,7 +339,7 @@ class App(ttk.Frame):
                                 self.info_label['text'] = '开始操作'
                                 begin = True
                             for ev in ces:
-                                ctl.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+                                self.controller.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
                                 # print(ev)
                             ce_ms, ces = next(ans_iter)
                 except Exception:
@@ -374,17 +380,20 @@ class App(ttk.Frame):
                     ce_ms, ces = next(ans_iter)
                     self.start_time = time.time() - ce_ms / 1000 - 0.01
 
-                    def incremented(event):
+                    def incremented(_):
                         self.start_time += 0.01
 
-                    def decremented(event):
+                    def decremented(_):
                         self.start_time -= 0.01
 
                     self.delay_input.bind('<<Increment>>', incremented)
                     self.delay_input.bind('<<Decrement>>', decremented)
 
+                    if self.controller is None:
+                        self.controller = DeviceController()
+
                     for ev in ces:
-                        ctl.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+                        self.controller.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
                     ce_ms, ces = next(ans_iter)
 
                     try:
@@ -393,7 +402,7 @@ class App(ttk.Frame):
                             now = round((time.time() - self.start_time) * 1000)
                             if now >= ce_ms:
                                 for ev in ces:
-                                    ctl.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+                                    self.controller.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
                                     # print(ev)
                                 ce_ms, ces = next(ans_iter)
                     except Exception:
