@@ -48,8 +48,6 @@ def extract_apk():
             if isinstance(obj, TextAsset):
                 with open(asset_name, 'w') as out:
                     out.write(obj.text)
-            elif isinstance(obj, Texture2D):
-                obj.get_image().save(asset_name)
 
     popup.destroy()
 
