@@ -32,7 +32,13 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
 1. `pip install -r requirements.txt`。
 2. 请安装`Android Debug Bridge`，**要求版本号至少为`1.0.41`**，并确保相应的环境变量已经配置好。
 3. 请准备Phigros的游戏安装包。目前支持v2.0.0至v2.1.1。
-4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v1.22`，下载后请**直接**放到本项目的根文件夹下(文件的全名就叫`scrcpy-server-v1.22`，一定不要改成别的名称！！)。
+4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载**最新版**的服务端文件，文件名通常为`scrcpy-server-v<版本号>`，例如`scrcpy-server-v1.25`。下载完成后，请将文件直接放置在phisap的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则phisap将无法识别。
+    + 如果你使用*nix系统，且安装有wget，那么下面的命令与上面描述的这段操作等价（以`1.25`版本为例）:
+        ```bash
+        cd phisap  # 定位到phisap的根目录下
+        wget https://github.com/Genymobile/scrcpy/releases/download/v1.25/scrcpy-server-v1.25
+        ```
+    + 注意，由于phisap与scrcpy项目组无任何关系，仅仅是本项目借助了他们的成果（感谢他们的辛勤付出），所以可能出现没有及时适配最新版的情况。**如果你下载了最新版的`scrcpy-server`，发现无法正常工作（并且旧版本的可以），请提issue**
 
 ### 运行
 ```bash

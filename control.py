@@ -45,16 +45,15 @@ class DeviceController:
             然后把它们丢到虚空'''
             while self.collector_running:
                 header = self.video_socket.recv(12)
-                pts, size = struct.unpack('!qI', header)
+                _pts, size = struct.unpack('!qI', header)
                 self.video_socket.recv(size)
 
         def ctrlmsg_receiver():
             '''另一个垃圾收集器
             收集的是scrcpy-server传来的控制事件的信息，
-            比如屏幕旋转事件等
-            '''
+            比如屏幕旋转事件等'''
             while self.collector_running:
-                msg_type = self.control_socket.recv(1)
+                _msg_type = self.control_socket.recv(1)
                 size, = struct.unpack('!I', self.control_socket.recv(4))
                 self.control_socket.recv(size)
 
