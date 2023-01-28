@@ -4,8 +4,6 @@ from enum import Enum, auto
 from typing import TypeVar, Generic, Any, IO, Optional
 
 import lz4.block
-import lz4.frame
-import lz4.stream
 from PIL import Image
 
 from binary_reader import BinaryReader
