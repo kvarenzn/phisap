@@ -1,3 +1,8 @@
+# [deprecated]
+项目无限期暂停开发
+
+请使用[ClankySun10936/Phigros-Autoplay-Script](https://github.com/ClankySun10936/Phigros-Autoplay-Script)作为替代
+
 # phisap - PHIgros Semi-Auto Player
 适用于音游Phigros的半自动打歌器，**仅支持安卓设备**
 
