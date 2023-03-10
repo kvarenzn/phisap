@@ -27,10 +27,3 @@ class Note:
         return (f'''Note({['TAP', 'DRAG', 'HOLD', 'FLICK'][self.typ - 1]}, time={self.time}, x={self.x}, '''
                 f'''hold={self.hold}, speed={self.speed}, floor={self.floor})''')
 
-    @property
-    def width(self):
-        return 48
-
-    @property
-    def height(self):
-        return 2

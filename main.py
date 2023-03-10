@@ -9,7 +9,7 @@ from typing import Optional
 from catalog import Catalog
 from chart import Chart
 from control import DeviceController
-from extract import AssetsManager, Texture2D, TextAsset
+from extract import AssetsManager, TextAsset
 from solve import load_from_json, export_to_json
 
 
@@ -55,8 +55,7 @@ def extract_apk():
 def agreement():
     if os.path.exists('./cache'):
         return
-    if not messagebox.askyesno(title='用户协定', message='您因使用或修改本程序发生的一切后果将由您自己承担而与程序原作者无关。\n'
-                                                     '您是否同意？'):
+    if not messagebox.askyesno(title='用户协定', message='您因使用或修改本程序发生的一切后果将由您自己承担而与程序原作者无关。\n' '您是否同意？'):
         exit(1)
 
 
@@ -79,9 +78,7 @@ class App(ttk.Frame):
 
         ttk.Separator(orient='horizontal').pack(fill=X)
 
-        ttk.Label(text='注意：由于一些限制，目前并不能保证任意一首曲目在每次由本程序\n'
-                       '自动完成时都能达到φ(100%)的成绩。同样也不能保证将来版本的程序\n'
-                       '满足这一要求。').pack()
+        ttk.Label(text='注意：由于一些限制，目前并不能保证任意一首曲目在每次由本程序\n' '自动完成时都能达到φ(100%)的成绩。同样也不能保证将来版本的程序\n' '满足这一要求。').pack()
 
         ttk.Separator(orient='horizontal').pack(fill=X)
 
@@ -100,10 +97,12 @@ class App(ttk.Frame):
 
         ttk.Label(frm, text='计时器同步方式：').grid(column=0, row=0)
 
-        self.sync_mode1 = ttk.Radiobutton(frm, text='延时同步', variable=self.sync_mode, value=0,
-                                          command=self.sync_mode_changed)
-        self.sync_mode2 = ttk.Radiobutton(frm, text='手动同步', variable=self.sync_mode, value=1,
-                                          command=self.sync_mode_changed)
+        self.sync_mode1 = ttk.Radiobutton(
+            frm, text='延时同步', variable=self.sync_mode, value=0, command=self.sync_mode_changed
+        )
+        self.sync_mode2 = ttk.Radiobutton(
+            frm, text='手动同步', variable=self.sync_mode, value=1, command=self.sync_mode_changed
+        )
         self.sync_mode1.grid(column=1, row=0)
         self.sync_mode2.grid(column=2, row=0)
 
@@ -181,9 +180,12 @@ class App(ttk.Frame):
             if not len(self.songs_select['values']):
                 raise RuntimeError('no chart files')
         except Exception:
-            messagebox.showinfo('谱面库为空', 'phisap需要依赖游戏的谱面文件才能工作，然而您当前的谱面库为空\n'
-                                         'phisap支持从游戏安装包中解包并读取谱面文件，接下来请您选择游戏的安装包\n'
-                                         '另外，每当游戏更新后，您都需要重新点击"解包Apk"按钮来更新谱面库')
+            messagebox.showinfo(
+                '谱面库为空',
+                'phisap需要依赖游戏的谱面文件才能工作，然而您当前的谱面库为空\n'
+                'phisap支持从游戏安装包中解包并读取谱面文件，接下来请您选择游戏的安装包\n'
+                '另外，每当游戏更新后，您都需要重新点击"解包Apk"按钮来更新谱面库',
+            )
             extract_apk()
             self.load_songs()
         finally:
@@ -201,8 +203,11 @@ class App(ttk.Frame):
 
         try:
             self.song_id.set(cache.get('cache', 'songid'))
-            difficulties = [file[6:-5] for file in os.listdir(os.path.join('./Assets/Tracks', self.song_id.get())) if
-                            'ans' not in file]
+            difficulties = [
+                file[6:-5]
+                for file in os.listdir(os.path.join('./Assets/Tracks', self.song_id.get()))
+                if 'ans' not in file
+            ]
             self.difficulties_select['values'] = difficulties
         except configparser.NoOptionError:
             cache.set('cache', 'songid', '')
@@ -227,8 +232,7 @@ class App(ttk.Frame):
 
     def song_selected(self, event):
         songid = event.widget.get()
-        difficulties = [file[6:-5] for file in os.listdir(os.path.join('./Assets/Tracks', songid)) if
-                        'ans' not in file]
+        difficulties = [file[6:-5] for file in os.listdir(os.path.join('./Assets/Tracks', songid)) if 'ans' not in file]
         self.difficulties_select['values'] = difficulties
 
     def difficulty_selected(self, event):
@@ -258,10 +262,12 @@ class App(ttk.Frame):
                 ans = load_from_json(open(ans_file))
             elif algo_method == 'algo1':
                 import algo.algo1
+
                 ans = algo.algo1.solve(chart)
                 export_to_json(ans, open(ans_file, 'w'))
             elif algo_method == 'algo2':
                 import algo.algo2
+
                 ans = algo.algo2.solve(chart)
                 export_to_json(ans, open(ans_file, 'w'))
             else:
@@ -356,7 +362,6 @@ class App(ttk.Frame):
 
                 self.delay_input.unbind('<<Increment>>')
                 self.delay_input.unbind('<<Decrement>>')
-
             else:
                 self.info_label['text'] = '准备就绪\n请在第一个音符快落到判定线时，再按下上面的按钮\n可以使用空格键触发'
                 self.go['text'] = '开始操作'
@@ -364,7 +369,6 @@ class App(ttk.Frame):
                 self.running = True
 
                 def go_now():
-
                     def stop():
                         self.running = False
 

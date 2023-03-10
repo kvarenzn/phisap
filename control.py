@@ -13,7 +13,7 @@ class DeviceController:
     device_size: tuple[int, int]
     collector_running: bool
 
-    def __init__(self, port: int = 27183, push_server: bool = True, server_dir: str = '.'):
+    def __init__(self, port: int = 27183, push_server: bool = True, server_dir: str = '.', max_size=184):
         server_file = next(filter(lambda p: p.startswith('scrcpy-server-v'), os.listdir(server_dir)))
         server_file = os.path.join(server_dir, server_file)
         server_version = server_file.split('v')[-1]
@@ -24,14 +24,16 @@ class DeviceController:
         skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         skt.bind(('localhost', port))
         skt.listen(1)
-        self.server_process = subprocess.Popen(
-            ['adb', 'shell', 'CLASSPATH=/data/local/tmp/scrcpy-server.jar', 'app_process', '/',
-             'com.genymobile.scrcpy.Server',
-             server_version,
-             'log_level=warn',
-             'bit_rate=8000000',
-             'clipboard_autosync=false'
-             ])
+        command_line = ['adb', 'shell', 'CLASSPATH=/data/local/tmp/scrcpy-server.jar', 'app_process', '/',
+                        'com.genymobile.scrcpy.Server',
+                        server_version,
+                        'log_level=warn',
+                        'bit_rate=8000000',
+                        'clipboard_autosync=false'
+                        ]
+        if isinstance(max_size, int):
+            command_line.append(f'max_size={max_size}')
+        self.server_process = subprocess.Popen(command_line)
         self.video_socket, _ = skt.accept()
         self.control_socket, _ = skt.accept()
         subprocess.run(['adb', 'reverse', '--remove', 'localabstract:scrcpy'])  # 禁用adb tunnel
@@ -60,6 +62,7 @@ class DeviceController:
         _device_name = self.video_socket.recv(64)
         width, height = struct.unpack('!HH', self.video_socket.recv(4))
         self.device_size = width, height
+        print(self.device_size)
 
         self.garbage_collector = threading.Thread(target=collector, daemon=True)
         self.garbage_collector.start()
