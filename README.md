@@ -1,8 +1,3 @@
-# [deprecated]
-项目无限期暂停开发
-
-请使用[ClankySun10936/Phigros-Autoplay-Script](https://github.com/ClankySun10936/Phigros-Autoplay-Script)作为替代
-
 # phisap - PHIgros Semi-Auto Player
 适用于音游Phigros的半自动打歌器，**仅支持安卓设备**
 
@@ -33,10 +28,15 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
 ## 如何使用
 
 ### 准备
-0. **请安装Python 3.10**。真的很重要，因为项目使用了一些3.10才支持的语法糖，并且我不打算做向下兼容
-1. `pip install -r requirements.txt`。
+0. **请安装Python 3.10及以上的版本**
+	+ 如果你安装了`3.11`，并且在使用phisap时遇到了一些问题，请开issue
+1. 使用`pip install -r requirements.txt`安装依赖
 2. 请安装`Android Debug Bridge`，**要求版本号至少为`1.0.41`**，并确保相应的环境变量已经配置好。
-3. 请准备Phigros的游戏安装包。目前支持v2.0.0至v2.1.1。
+3. 请准备Phigros的游戏安装包。目前支持v2.0.0至v2.1.1。**更新：已修复2.5.1愚人节版本的解包问题，不过并没有测试谱面规划算法是否可用**
+	+ 可以使用如下命令从安卓设备上提取安装包
+		```bash
+		adb pull $(adb shell pm path com.PigeonGames.Phigros | cut -f2 -d:) ./Phigros.apk
+		```
 4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载**最新版**的服务端文件，文件名通常为`scrcpy-server-v<版本号>`，例如`scrcpy-server-v1.25`。下载完成后，请将文件直接放置在phisap的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则phisap将无法识别。
     + 如果你使用*nix系统，且安装有wget，那么下面的命令与上面描述的这段操作等价（以`1.25`版本为例）:
         ```bash
@@ -57,13 +57,14 @@ python main.py
 
 PS: 如果你知道怎样实现不root的前提下精确获知当前曲目进度，且愿意帮助本项目的话，请开issue告知我做法。
 
-## 待办列表
-+ [x] 重写解包代码，使之可以解出图像/字体素材
-+ [ ] 使用PySide6+QML重置用户界面
-+ [ ] 重写规划算法，使规划出来的手法更具有参考价值
-+ [ ] 加入编辑手法的功能
-+ [ ] 完善对韵律源点的支持
-+ [ ] 规避系统手势误触发（例如三指截图、通知中心下拉等）
+
+## 如果你在使用过程中遇到了问题，请开issue
+**请在issue中包含如下内容**
++ 你的操作系统版本
++ 你遇到的问题
++ 能反映遇到的问题的日志、记录或者截图
+**如果之后的更新解决了你的问题，请关闭自己开的issue**
+**如果一百度就能找到解决方法的问题，不要开issue，例如依赖安装问题，如果你开了也会被我关上甚至删除**
 
 ## 对Arcaea的支持
 项目`闊靛緥婧愮偣/`文件夹下的文件实现了最简陋的对音游韵律源点（arcaea）的支持，原理完全相同。
