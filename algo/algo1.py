@@ -3,7 +3,7 @@
 import math
 from typing import Any
 
-from .algo_base import TouchAction, TouchEvent
+from .algo_base import TouchAction, VirtualTouchEvent
 from chart import Chart
 from note import Note
 from utils import distance_of, recalc_pos
@@ -123,20 +123,20 @@ class Pointers:
             yield ptr.pid, ptr.timestamp + 1, ptr.pos
 
 
-def solve(chart: Chart) -> dict[int, list[TouchEvent]]:
+def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
     flick_start = -30
     flick_end = 30
     flick_scale_factor = 100
 
     frames: dict[int, list] = {}
-    result: dict[int, list[TouchEvent]] = {}
+    result: dict[int, list[VirtualTouchEvent]] = {}
 
     def insert(milliseconds: int, event: dict):
         if milliseconds not in frames:
             frames[milliseconds] = []
         frames[milliseconds].append(event)
 
-    def ins(milliseconds: int, event: TouchEvent):
+    def ins(milliseconds: int, event: VirtualTouchEvent):
         if milliseconds not in result:
             result[milliseconds] = []
         result[milliseconds].append(event)
@@ -223,40 +223,40 @@ def solve(chart: Chart) -> dict[int, list[TouchEvent]]:
         for note in frame:
             action = note['a']
             if action == 'tap':
-                ins(ms, TouchEvent(note['p'], TouchAction.DOWN, pointers.acquire(note)[0]))
+                ins(ms, VirtualTouchEvent(note['p'], TouchAction.DOWN, pointers.acquire(note)[0]))
                 pointers.release(note)
                 is_keyframe = True
 
             elif action == 'drag':
                 pid, new = pointers.acquire(note, new=False)
                 act = TouchAction.DOWN if new else TouchAction.MOVE
-                ins(ms, TouchEvent(note['p'], act, pid))
+                ins(ms, VirtualTouchEvent(note['p'], act, pid))
                 pointers.release(note)
                 # is_keyframe = True
 
             elif action == 'flick_start':
                 pid, new = pointers.acquire(note, new=False)
                 act = TouchAction.DOWN if new else TouchAction.MOVE
-                ins(ms, TouchEvent(note['p'], act, pid))
+                ins(ms, VirtualTouchEvent(note['p'], act, pid))
             elif action == 'flick':
-                ins(ms, TouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
+                ins(ms, VirtualTouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
             elif action == 'flick_end':
-                ins(ms, TouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
+                ins(ms, VirtualTouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
                 pointers.release(note)
 
             elif action == 'hold_start':
-                ins(ms, TouchEvent(note['p'], TouchAction.DOWN, pointers.acquire(note)[0]))
+                ins(ms, VirtualTouchEvent(note['p'], TouchAction.DOWN, pointers.acquire(note)[0]))
                 is_keyframe = True
             elif action == 'hold':
-                ins(ms, TouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
+                ins(ms, VirtualTouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
             elif action == 'hold_end':
-                ins(ms, TouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
+                ins(ms, VirtualTouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
                 pointers.release(note)
 
         for pid, ts, pos in pointers.recycle(is_keyframe):
-            ins(ts, TouchEvent(pos, TouchAction.UP, pid))
+            ins(ts, VirtualTouchEvent(pos, TouchAction.UP, pid))
 
     for pid, ts, pos in pointers.finish():
-        ins(ts, TouchEvent(pos, TouchAction.UP, pid))
+        ins(ts, VirtualTouchEvent(pos, TouchAction.UP, pid))
     print('规划完毕.')
     return result

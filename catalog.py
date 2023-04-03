@@ -21,7 +21,7 @@ class Catalog:
         for _ in range(bucket_count):
             self.buckets.append({
                 'offset': reader.i32,
-                'entries': [reader.i32 for __ in range(reader.i32)]
+                'entries': [reader.i32 for _ in range(reader.i32)]
             })
 
         self.keys = []
@@ -74,9 +74,9 @@ class Catalog:
     def read_object(cls, reader: BinaryReader):
         obj_type = reader.u8
         if obj_type == 0:  # ascii string
-            return reader.str(reader.u32)
+            return reader.string(reader.u32)
         elif obj_type == 1:  # unicode(16) string
-            return reader.str(reader.u32, 'utf-16')
+            return reader.string(reader.u32, 'utf-16')
         elif obj_type == 2:  # u16
             return reader.u16
         elif obj_type == 3:  # u32
@@ -85,9 +85,9 @@ class Catalog:
             return reader.i32
         elif obj_type == 7:  # json object
             return {
-                'assembly_name': reader.str(reader.u8),
-                'class_name': reader.str(reader.u8),
-                'json': loads(reader.str(reader.i32, 'utf-16'))
+                'assembly_name': reader.string(reader.u8),
+                'class_name': reader.string(reader.u8),
+                'json': loads(reader.string(reader.i32, 'utf-16'))
             }
         else:
             raise RuntimeError(f'type {obj_type} not supported now.')

@@ -8,7 +8,7 @@ from typing import Optional, Iterator
 from chart import Chart
 from note import Note
 from utils import recalc_pos
-from .algo_base import TouchAction, TouchEvent
+from .algo_base import TouchAction, VirtualTouchEvent
 
 
 class SimpleNote:
@@ -100,7 +100,7 @@ flick_scale_factor = 100
 
 class PointerAllocator:
     pointers: list[Pointer]
-    events: dict[int, list[TouchEvent]]
+    events: dict[int, list[VirtualTouchEvent]]
     last_timestamp: Optional[int]
     now: int
 
@@ -126,23 +126,23 @@ class PointerAllocator:
                 return pointer
         return None
 
-    def _insert(self, timestamp: int, event: TouchEvent):
+    def _insert(self, timestamp: int, event: VirtualTouchEvent):
         if timestamp not in self.events:
             self.events[timestamp] = []
         self.events[timestamp].append(event)
 
     def _tap(self, pointer: Pointer, note: SimpleNote):
         if pointer.note is not None:
-            self._insert(self.now - pointer.age + 1, TouchEvent(pointer.note.pos, TouchAction.UP, pointer.id))
+            self._insert(self.now - pointer.age + 1, VirtualTouchEvent(pointer.note.pos, TouchAction.UP, pointer.id))
         pointer.note = note
         pointer.age = 0
-        self._insert(self.now, TouchEvent(note.pos, TouchAction.DOWN, pointer.id))
+        self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
 
     def _flick(self, pointer: Pointer, note: SimpleNote):
         if pointer.note is None:
-            self._insert(self.now, TouchEvent(note.pos, TouchAction.DOWN, pointer.id))
+            self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
         else:
-            self._insert(self.now, TouchEvent(note.pos, TouchAction.MOVE, pointer.id))
+            self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.MOVE, pointer.id))
         alpha = note.angle
         sa, ca = math.sin(alpha), math.cos(alpha)
         px, py = note.pos
@@ -150,17 +150,17 @@ class PointerAllocator:
             offset = off + flick_start
             px, py = note.pos[0] + math.sin(offset * math.pi / 10) * flick_scale_factor * sa, note.pos[1] + math.sin(
                 offset * math.pi / 10) * flick_scale_factor * ca
-            self._insert(self.now, TouchEvent((px, py), TouchAction.MOVE, pointer.id))
+            self._insert(self.now, VirtualTouchEvent((px, py), TouchAction.MOVE, pointer.id))
         note.pos = (px, py)
         pointer.note = note
         pointer.age = flick_start - flick_end
 
     def _drag(self, pointer: Pointer, note: SimpleNote):
         if pointer.note is None:
-            self._insert(self.now, TouchEvent(note.pos, TouchAction.DOWN, pointer.id))
+            self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
         else:
-            self._insert(self.now, TouchEvent(note.pos, TouchAction.MOVE, pointer.id))
-        self._insert(self.now, TouchEvent(note.pos, TouchAction.MOVE, pointer.id))
+            self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.MOVE, pointer.id))
+        self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.MOVE, pointer.id))
         pointer.note = note
         pointer.age = 0
 
@@ -197,7 +197,7 @@ class PointerAllocator:
         return self.events
 
 
-def solve(chart: Chart) -> dict[int, list[TouchEvent]]:
+def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
     frames = Frames()
 
     print('正在统计帧...', end='')

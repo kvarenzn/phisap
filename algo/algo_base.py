@@ -7,12 +7,8 @@ class TouchAction(Enum):
     UP = 1
     MOVE = 2
 
-    @classmethod
-    def from_str(cls, string: str) -> 'TouchAction':
-        return cls._member_map_[string]
 
-
-class TouchEvent(NamedTuple):
+class VirtualTouchEvent(NamedTuple):
     pos: tuple[float, float]
     action: TouchAction
     pointer: int
@@ -22,12 +18,22 @@ class TouchEvent(NamedTuple):
         return f'''TouchEvent<{self.pointer} {self.action.name} @ ({x:4.2f}, {y:4.2f})>'''
 
     def to_serializable(self):
-        return {
-            'pos': self.pos,
-            'action': self.action.name,
-            'pointer': self.pointer
-        }
+        return {'pos': self.pos, 'action': self.action.value, 'pointer': self.pointer}
 
     @classmethod
-    def from_serializable(cls, obj: dict) -> 'TouchEvent':
-        return TouchEvent(obj['pos'], TouchAction.from_str(obj['action']), obj['pointer'])
+    def from_serializable(cls, obj: dict) -> 'VirtualTouchEvent':
+        return VirtualTouchEvent(obj['pos'], TouchAction(obj['action']), obj['pointer'])
+
+    def map_to(self, x_offset: int, y_offset: int, x_scale: float, y_scale: float) -> 'TouchEvent':
+        x_orig, y_orig = self.pos
+        return TouchEvent(
+            pos=(x_offset + round(x_orig * x_scale), y_offset + round(y_orig * y_scale)),
+            action=self.action,
+            pointer=self.pointer,
+        )
+
+
+class TouchEvent(NamedTuple):
+    pos: tuple[int, int]
+    action: TouchAction
+    pointer: int

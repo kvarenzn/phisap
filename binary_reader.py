@@ -1,28 +1,15 @@
 import io
 from io import SEEK_CUR, SEEK_END
-from typing import BinaryIO
-from struct import unpack, calcsize
+from typing import IO
+from struct import unpack
 
 
 class BinaryReader:
-    _KNOWN_TYPES = {
-        'i32': 'i',
-        'u32': 'I',
-        'i16': 'h',
-        'u16': 'H',
-        'i8': 'b',
-        'u8': 'B',
-        'i64': 'q',
-        'u64': 'Q',
-        'f32': 'f',
-        'f64': 'd'
-    }
-
-    _stream: BinaryIO
+    _stream: IO[bytes]
     _format_head: str
     _header_backup: str | None
 
-    def __init__(self, stream: BinaryIO | bytes | bytearray, big_endian: bool = True):
+    def __init__(self, stream: IO[bytes] | bytes | bytearray, big_endian: bool = True):
         if isinstance(stream, (bytes, bytearray)):
             self._stream = io.BytesIO(stream)
         else:
@@ -32,7 +19,7 @@ class BinaryReader:
         self._header_backup = None
 
     @property
-    def bool(self) -> bool:
+    def boolean(self) -> bool:
         return bool(self._stream.read(1)[0])
 
     @property
@@ -60,13 +47,6 @@ class BinaryReader:
     def big_endian(self, big_endian: bool):
         self._format_head = '>' if big_endian else '<'
 
-    def save_endian(self):
-        self._header_backup = self._format_head
-
-    def restore_endian(self):
-        if self._header_backup is not None:
-            self._format_head = self._header_backup
-
     def offset(self, offset: int) -> 'BinaryReader':
         self._stream.seek(offset)
         return self
@@ -80,7 +60,7 @@ class BinaryReader:
     def read(self, count: int) -> bytes:
         return self._stream.read(count)
 
-    def str(self, length: int, encoding: str = 'utf-8') -> str:
+    def string(self, length: int, encoding: str = 'utf-8') -> str:
         return self._stream.read(length).decode(encoding=encoding)
 
     def bcstr(self) -> bytes:
@@ -95,7 +75,7 @@ class BinaryReader:
             barr += b
         return barr.decode()
 
-    def bcstrl(self, max_size: int) -> str:
+    def bcstrl(self, max_size: int) -> bytes:
         barr = bytearray()
         counter = 0
         while (b := self._stream.read(1)) != b'\0' and counter < max_size:
@@ -104,17 +84,54 @@ class BinaryReader:
         return barr
 
     def aligned_string(self) -> str:
-        res = self.str(self.i32)
+        res = self.string(self.i32)
         self.align(4)
         return res
 
-    def __getattr__(self, name):
-        if name in self._KNOWN_TYPES:
-            fmt = self._KNOWN_TYPES[name]
-            return unpack(self._format_head + fmt, self._stream.read(calcsize(fmt)))[0]
+    @property
+    def f32(self) -> float:
+        return unpack(self._format_head + 'f', self._stream.read(4))[0]
+
+    @property
+    def f64(self) -> float:
+        return unpack(self._format_head + 'd', self._stream.read(8))[0]
+
+    @property
+    def i8(self) -> int:
+        return unpack(self._format_head + 'b', self._stream.read(1))[0]
+
+    @property
+    def u8(self) -> int:
+        return unpack(self._format_head + 'B', self._stream.read(1))[0]
+
+    @property
+    def i16(self) -> int:
+        return unpack(self._format_head + 'h', self._stream.read(2))[0]
+
+    @property
+    def u16(self) -> int:
+        return unpack(self._format_head + 'H', self._stream.read(2))[0]
+
+    @property
+    def i32(self) -> int:
+        return unpack(self._format_head + 'i', self._stream.read(4))[0]
+
+    @property
+    def u32(self) -> int:
+        return unpack(self._format_head + 'I', self._stream.read(4))[0]
+
+    @property
+    def i64(self) -> int:
+        return unpack(self._format_head + 'q', self._stream.read(8))[0]
+
+    @property
+    def u64(self) -> int:
+        return unpack(self._format_head + 'Q', self._stream.read(8))[0]
 
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *_):
         pass
+
+__all__ = ['BinaryReader']

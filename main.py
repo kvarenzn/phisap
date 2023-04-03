@@ -32,8 +32,11 @@ def extract_apk():
             continue
         with apk_file.open(file) as f:
             manager.load_file(f)
+    popup.title('已加载安装包')
+    popup.update()
     manager.read_assets()
     for file in manager.asset_files:
+        assert file.parent
         filepath = file.parent.reader.path
         if filepath.name not in catalog.fname_map:
             continue
@@ -48,6 +51,8 @@ def extract_apk():
             if isinstance(obj, TextAsset):
                 with open(asset_name, 'w') as out:
                     out.write(obj.text)
+                    popup.title('正在解包，请稍候...')
+                    popup.update()
 
     popup.destroy()
 
@@ -73,14 +78,6 @@ class App(ttk.Frame):
         self.pack()
 
         self.master.title('phisap')
-
-        ttk.Label(text='适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活').pack()
-
-        ttk.Separator(orient='horizontal').pack(fill=X)
-
-        ttk.Label(text='注意：由于一些限制，目前并不能保证任意一首曲目在每次由本程序\n' '自动完成时都能达到φ(100%)的成绩。同样也不能保证将来版本的程序\n' '满足这一要求。').pack()
-
-        ttk.Separator(orient='horizontal').pack(fill=X)
 
         frm = ttk.Frame()
         frm.pack()
@@ -250,6 +247,8 @@ class App(ttk.Frame):
 
             chart = Chart.from_dict(json.load(open(chart_path)))
 
+            assert self.cache
+            assert self.cache_path
             self.cache.set('cache', 'songid', self.song_id.get())
             self.cache.set('cache', 'difficulty', self.difficulty.get())
             self.cache.set('cache', 'offset', str(self.delay.get()))
@@ -284,15 +283,12 @@ class App(ttk.Frame):
             yoffset = (device_size[1] - height) // 2
             scale_factor = height / 720
 
-            for evs in ans.values():
-                for i in range(len(evs)):
-                    ev = evs[i]
-                    x, y = ev.pos
-                    x = xoffset + round(x * scale_factor)
-                    y = yoffset + round(y * scale_factor)
-                    evs[i] = ev._replace(pos=(x, y))
+            adapted_ans = [
+                (timestamp, [ev.map_to(xoffset, yoffset, scale_factor, scale_factor) for ev in ans[timestamp]])
+                for timestamp in sorted(ans.keys())
+            ]
 
-            ans_iter = iter(sorted(ans.items()))
+            ans_iter = iter(adapted_ans)
 
             pre_info = self.info_label['text']
             pre_command = self.go['command']

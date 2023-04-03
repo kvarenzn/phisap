@@ -1,7 +1,7 @@
 import os.path
 import pathlib
 from enum import Enum, auto
-from typing import TypeVar, Generic, Any, IO, Optional
+from typing import TypeVar, Generic, IO, Optional
 
 import lz4.block
 from PIL import Image
@@ -149,13 +149,16 @@ class ClassID(Enum):
     SHADER = 48
     TEXT_ASSET = 49
     ANIMATION_CLIP = 74
+    AUDIO_SOURCE = 82
     AUDIO_CLIP = 83
     ANIMATOR_CONTROLLER = 91
     ANIMATOR = 95
     MONO_BEHAVIOUR = 114
     MONO_SCRIPT = 115
-    ASSET_BUNDLE = 142
     FONT = 128
+    ASSET_BUNDLE = 142
+    PARTICLE_SYSTEM = 198
+    PARTICLE_SYSTEM_RENDERER = 199
     SPRITE_RENDERER = 212
     SPRITE = 213
     CANVAS_RENDERER = 222
@@ -208,6 +211,7 @@ class SerializedFile:
         reserved_bytes: bytes
 
     assets_manager: 'AssetsManager'
+    original_path: pathlib.Path
     path: pathlib.Path
     file_header: FileHeader
     file_big_endian: bool
@@ -239,12 +243,12 @@ class SerializedFile:
 
         # header
         if self.file_header.version >= 9:
-            self.file_header.big_endian = reader.bool
+            self.file_header.big_endian = reader.boolean
             self.file_header.reserved_bytes = reader.read(3)
             self.file_big_endian = self.file_header.big_endian
         else:
             reader.pos = self.file_header.file_size - self.file_header.metadata_size
-            self.file_big_endian = reader.bool
+            self.file_big_endian = reader.boolean
 
         if self.file_header.version >= 22:
             self.file_header.metadata_size = reader.u32
@@ -265,7 +269,7 @@ class SerializedFile:
 
         self.enable_type_tree = True
         if self.file_header.version >= 13:
-            self.enable_type_tree = reader.bool
+            self.enable_type_tree = reader.boolean
 
         # types
         types_count = reader.i32
@@ -301,8 +305,8 @@ class SerializedFile:
             obj_info.type_id = reader.i32
 
             if self.file_header.version < 16:
-                obj_info.class_id = reader.u16
-                obj_info.serialized_type = next(filter(lambda x: x.class_id == obj_info.type_id, self.types))
+                obj_info.class_id = ClassID(reader.u16)
+                obj_info.serialized_type = next(filter(lambda x: x and x.class_id.value == obj_info.type_id, self.types))
             else:
                 t = self.types[obj_info.type_id]
                 obj_info.serialized_type = t
@@ -317,7 +321,7 @@ class SerializedFile:
                     obj_info.serialized_type.script_type_index = script_type_index
 
             if self.file_header.version == 15 or self.file_header.version == 16:
-                obj_info.stripped = reader.bool
+                obj_info.stripped = reader.boolean
 
             self.object_infos.append(obj_info)
 
@@ -371,7 +375,7 @@ class SerializedFile:
 
         version = self.file_header.version
         if version >= 16:
-            t.is_stripped_type = reader.bool
+            t.is_stripped_type = reader.boolean
 
         if version >= 17:
             t.script_type_index = reader.u16
@@ -495,6 +499,7 @@ class ResourceReader:
             raise RuntimeError(f'{resource_file_path} not exists')
         if resource_file_path.exists():
             raise RuntimeError(f'{resource_file_path} exists')
+        raise RuntimeError('unimplemented')
 
     def get(self) -> bytes:
         self.reader.pos = self.offset
@@ -507,7 +512,7 @@ class ObjectReader(BinaryReader):
     byte_start: int
     byte_size: int
     class_id: ClassID
-    serialized_type: SerializedType
+    serialized_type: SerializedType | None
     version: list[int]
     platform: int
     format_version: int
@@ -533,7 +538,7 @@ class Object:
     version: list[int]
     platform: int
     class_id: ClassID
-    serialized_type: SerializedType
+    serialized_type: SerializedType | None
     byte_size: int
 
     def __init__(self, reader: ObjectReader):
@@ -543,7 +548,7 @@ class Object:
         self.class_id = reader.class_id
         self.path_id = reader.path_id
         self.version = reader.version
-        self.platform = reader.target_platform
+        self.platform = reader.platform
         self.serialized_type = reader.serialized_type
         self.byte_size = reader.byte_size
 
@@ -583,38 +588,13 @@ class PPtr(Generic[T]):
         self.path_id = reader.i32 if reader.format_version < 14 else reader.i64
         self.asset_file = reader.asset_file
 
-    def get_asset_file(self) -> SerializedFile | None | list[SerializedFile]:
-        if self.file_id == 0:
-            return self.asset_file
-        if self.file_id > 0 and self.file_id - 1 < len(self.asset_file.externals):
-            manager = self.asset_file.assets_manager
-
-            if self.index == -2:
-                external = self.asset_file.externals[self.file_id - 1]
-                name = external.path_name
-                if name not in manager.asset_file_index_cache:
-                    index = manager.asset_files.index(
-                        next(filter(lambda x: x.path.name.upper() == name.upper(), manager.asset_files)))
-                    manager.asset_file_index_cache[name] = index
-
-            if self.index >= 0:
-                return manager.asset_files[self.index]
-
-    def deref(self) -> T:
-        if source_file := self.get_asset_file():
-            if self.path_id in source_file.object_map:
-                return source_file.object_map[self.path_id]
-
 
 class TextAsset(NamedObject):
     text: str
 
     def __init__(self, reader: ObjectReader):
         super().__init__(reader)
-        self.text = reader.str(reader.i32)
-
-    def __repr__(self):
-        return f'TextAsset(text={repr(self.text)})'
+        self.text = reader.string(reader.i32)
 
 
 class AssetInfo:
@@ -661,9 +641,9 @@ class Texture(NamedObject):
         version = reader.version
         if version >= [2017, 3]:
             _forced_fallback_format = reader.i32
-            _downscale_fallback = reader.bool
+            _downscale_fallback = reader.boolean
             if version >= [2020, 2]:
-                _is_alpha_channel_optional = reader.bool
+                _is_alpha_channel_optional = reader.boolean
             reader.align(4)
 
 
@@ -769,28 +749,6 @@ class Texture2D(Texture):
             else:
                 self.wrap_mode = reader.i32
 
-    class Decoder:
-
-        @staticmethod
-        def decode_etc2_block():
-            pass
-
-        @staticmethod
-        def decode_etc2a8_block(data: bytes) -> bytes:
-            pass
-
-        @staticmethod
-        def decode_etc2a8(data: bytes, width: int, height: int) -> bytes:
-            results = bytearray()
-            reader = BinaryReader(data)
-            num_blocks_x = (width + 3) // 4
-            num_blocks_y = (height + 3) // 4
-            for by in range(num_blocks_y):
-                for bx in range(num_blocks_x):
-                    _d1 = reader.read(4)
-                    _d2 = reader.read(4)
-            return results
-
     width: int
     height: int
     texture_format: TextureFormat
@@ -812,24 +770,24 @@ class Texture2D(Texture):
         self.texture_format = self.TextureFormat(reader.i32)
 
         if version <= [5, 2]:
-            self.mipmap = reader.bool
+            self.mipmap = reader.boolean
         else:
             self.mip_count = reader.i32
 
         if version >= [2, 6]:
-            _is_readable = reader.bool
+            _is_readable = reader.boolean
 
         if version >= [2020]:
-            _is_pre_processed = reader.bool
+            _is_pre_processed = reader.boolean
 
         if version >= [2019, 3]:
-            _ignore_master_texture_limit = reader.bool
+            _ignore_master_texture_limit = reader.boolean
 
         if [3] <= version <= [5, 4]:
-            _read_allowed = reader.bool
+            _read_allowed = reader.boolean
 
         if version >= [2018, 2]:
-            _streaming_mipmaps = reader.bool
+            _streaming_mipmaps = reader.boolean
         reader.align(4)
         if version >= [2018, 2]:
             _streaming_mipmaps_priority = reader.i32
@@ -930,7 +888,7 @@ class Font(NamedObject):
                 _width = reader.f32
 
                 if self.version >= [4]:
-                    _flipped = reader.bool
+                    _flipped = reader.boolean
                     reader.align(4)
 
             _texture = PPtr[Texture](reader)
@@ -941,7 +899,7 @@ class Font(NamedObject):
                 _second = reader.f32
 
             if self.version <= [3]:
-                _grid_font = reader.bool
+                _grid_font = reader.boolean
                 reader.align(4)
             else:
                 _pixel_scale = reader.f32
@@ -979,45 +937,6 @@ class Vector4:
     @classmethod
     def read(cls, reader: BinaryReader) -> 'Vector4':
         return cls(reader.f32, reader.f32, reader.f32, reader.f32)
-
-
-class Sprite(NamedObject):
-    rect: RectF
-    offset: Vector2
-    border: Vector4
-    pixels_to_units: float
-    pivot: Vector2
-    extrude: int
-    is_polygon: bool
-    render_data_key: tuple[bytes, int]
-    atlas_tags: list[str]
-    sprite_atlas: PPtr[Object]
-    render_data: Any
-    physics_shape: list[list[Vector2]]
-
-    def __init__(self, reader: ObjectReader):
-        super().__init__(reader)
-        self.rect = RectF(reader)
-        self.offset = Vector2.read(reader)
-        if self.version >= [4, 5]:
-            self.border = Vector4.read(reader)
-        self.pixels_to_units = reader.f32
-        self.pivot = Vector2(0, 0)
-        if self.version >= [5, 4, 1]:
-            self.pivot = Vector2.read(reader)
-        self.extrude = reader.u32
-        if self.version >= [5, 3]:
-            self.is_polygon = reader.bool
-            reader.align(4)
-        if self.version >= [2017]:
-            self.render_data_key = (reader.read(16), reader.i64)
-            self.atlas_tags = [reader.aligned_string() for _ in reader.i32]
-            self.sprite_atlas = PPtr[Object](reader)
-
-        pass
-
-        if self.version >= [2017]:
-            self.physics_shape = [[Vector2.read(reader) for __ in range(reader.i32)] for _ in range(reader.i32)]
 
 
 class StreamFile:
@@ -1124,7 +1043,7 @@ class BundleFile:
     header: Header
     blocks_info: list[StorageBlock]
     directory_info: list[Node]
-    files: list[StreamFile | SerializedFile]
+    files: list[StreamFile]
     reader: FileReader
 
     def __init__(self, reader: FileReader):
@@ -1260,10 +1179,10 @@ class AssetsManager:
                             obj = AssetBundle(obj_reader)
                         case ClassID.TEXT_ASSET:
                             obj = TextAsset(obj_reader)
-                        case ClassID.SPRITE:
-                            pass
                         case ClassID.TEXTURE_2D:
                             obj = Texture2D(obj_reader)
+                        case ClassID.SPRITE:
+                            pass
                         case ClassID.AUDIO_CLIP:
                             pass
                         case ClassID.MONO_SCRIPT:
