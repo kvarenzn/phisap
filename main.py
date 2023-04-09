@@ -77,8 +77,6 @@ class App(ttk.Frame):
         self.cache = None
         self.pack()
 
-        self.master.title('phisap')
-
         frm = ttk.Frame()
         frm.pack()
         self.extract_btn = ttk.Button(frm, text='解包Apk', command=extract_apk)
@@ -158,8 +156,6 @@ class App(ttk.Frame):
 
         self.info_label = ttk.Label(text='请开始游戏，再暂停游戏，然后再点击上面的开始按钮')
         self.info_label.pack()
-
-        self.master.minsize(400, 300)
 
         agreement()
 
@@ -340,7 +336,6 @@ class App(ttk.Frame):
                                 begin = True
                             for ev in ces:
                                 self.controller.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
-                                # print(ev)
                             ce_ms, ces = next(ans_iter)
                 except Exception:
                     pass
@@ -401,7 +396,6 @@ class App(ttk.Frame):
                             if now >= ce_ms:
                                 for ev in ces:
                                     self.controller.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
-                                    # print(ev)
                                 ce_ms, ces = next(ans_iter)
                     except Exception:
                         pass
@@ -427,4 +421,6 @@ class App(ttk.Frame):
 
 
 if __name__ == '__main__':
-    App(Tk()).load_songs().load_cache('./cache').mainloop()
+    tk = Tk()
+    tk.title('phisap')
+    App(tk).load_songs().load_cache('./cache').mainloop()
