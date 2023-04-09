@@ -1,18 +1,10 @@
 import math
-from typing import IO
 
 
 def distance_of(p1: tuple[float, float], p2: tuple[float, float]):
     p1x, p1y = p1
     p2x, p2y = p2
     return math.sqrt((p2x - p1x) ** 2 + (p2y - p1y) ** 2)
-
-
-def read_string_end_with_nil(f: IO) -> str:
-    res = bytearray()
-    while (c := f.read(1)) != b'\0':
-        res += c
-    return res.decode()
 
 
 def div(x: float, y: float) -> float:
@@ -24,10 +16,10 @@ def div(x: float, y: float) -> float:
 
 
 def recalc_pos(position: tuple[float, float], sa: float, ca: float) -> tuple[float, float]:
-    """ 重新计算坐标
+    """重新计算坐标
     一些情况下，note会在屏幕的外侧判定。点名批评Nhelv。
-    也就是说，此时px会在[0, 1280]的范围外，同时py会在[0, 720]的范围外。
-    这是我们需要重新规划note的位置，让note落在屏幕内。
+    也就是说，此时横坐标会在[0, 1280]的范围外，或者纵坐标会在[0, 720]的范围外。
+    这是我们需要重新规划击打的位置，让该位置落在屏幕内。
     我们利用屁股肉的垂直判定区域特性来解决这个问题。
     也就是说，在高垂直于判定线且长度不限，同时宽平行且与note等长的矩形范围内点击任意位置均视为判定成功。
     为了简化这个问题，我们将矩形视作一条线，这条线过矩形的终点且与矩形的两高平行。
