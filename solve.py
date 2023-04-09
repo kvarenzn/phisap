@@ -6,10 +6,7 @@ from algo.algo_base import VirtualTouchEvent
 
 def export_to_json(ans: dict[int, list[VirtualTouchEvent]], out_file: IO):
     dump(
-        {
-            timestamp: [event.to_serializable() for event in events]
-            for timestamp, events in ans.items()
-        },
+        {timestamp: [event.to_serializable() for event in events] for timestamp, events in ans.items()},
         out_file,
     )
 

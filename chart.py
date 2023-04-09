@@ -15,11 +15,9 @@ class Chart:
     def from_dict(cls, d: dict):
         version = d['formatVersion']
         if version == 1:
-            return cls(version, d['offset'],
-                       [*map(JudgeLine.from_dict_v1, d['judgeLineList'])])
+            return cls(version, d['offset'], [*map(JudgeLine.from_dict_v1, d['judgeLineList'])])
         else:
-            return cls(version, d['offset'],
-                       [*map(JudgeLine.from_dict, d['judgeLineList'])])
+            return cls(version, d['offset'], [*map(JudgeLine.from_dict, d['judgeLineList'])])
 
 
 __all__ = ['Chart']

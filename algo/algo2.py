@@ -210,7 +210,7 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
             x, y = line.pos(note.time)
             alpha = - line.angle(note.time) * math.pi / 180
             pos = x + off_x * math.cos(alpha), y + off_x * math.sin(alpha)
-            if note.typ == Note.HOLD:
+            if note.type == Note.HOLD:
                 hold_ms = math.ceil(line.seconds(note.hold) * 1000)
                 frames[ms].add(Note.TAP, pos, alpha)
                 for offset in range(1, hold_ms + 1):
@@ -218,10 +218,10 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
                     frames[ms + offset].add(Note.DRAG,
                                             line.pos_of(note, line.time((ms + offset) / 1000)),
                                             alpha)
-            elif note.typ == Note.FLICK:
+            elif note.type == Note.FLICK:
                 frames[ms + flick_start].add(Note.FLICK, pos, alpha)
             else:
-                frames[ms].add(note.typ, pos, alpha)
+                frames[ms].add(note.type, pos, alpha)
 
     print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
