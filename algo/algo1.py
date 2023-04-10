@@ -5,7 +5,7 @@ from typing import Any
 
 from .algo_base import TouchAction, VirtualTouchEvent
 from chart import Chart
-from note import Note
+from note import NoteType
 from utils import distance_of, recalc_pos
 
 
@@ -160,19 +160,19 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
             ca = math.cos(alpha)
             px, py = x + off_x * ca, y + off_x * sa
 
-            if note.type == Note.TAP:
+            if note.type == NoteType.TAP:
                 insert(ms, {
                     'a': 'tap',
                     'p': recalc_pos((px, py), sa, ca),
                     'i': current_event_id
                 })
-            elif note.type == Note.DRAG:
+            elif note.type == NoteType.DRAG:
                 insert(ms, {
                     'a': 'drag',
                     'p': recalc_pos((px, py), sa, ca),
                     'i': current_event_id
                 })
-            elif note.type == Note.FLICK:
+            elif note.type == NoteType.FLICK:
                 insert(ms + flick_start, {
                     'a': 'flick_start',
                     # 'p': flick_pos(*line.pos_of(note, line.time(ms + flick_start) / 1000), flick_start),
@@ -192,7 +192,7 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
                     'p': recalc_pos(flick_pos(px, py, flick_end), sa, ca),
                     'i': current_event_id
                 })
-            elif note.type == Note.HOLD:
+            elif note.type == NoteType.HOLD:
                 hold_ms = math.ceil(line.seconds(note.hold) * 1000)
                 insert(ms, {
                     'a': 'hold_start',

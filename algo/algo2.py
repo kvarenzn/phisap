@@ -6,7 +6,7 @@ from sys import stdout
 from typing import Optional, Iterator
 
 from chart import Chart
-from note import Note
+from note import NoteType
 from utils import recalc_pos
 from .algo_base import TouchAction, VirtualTouchEvent
 
@@ -26,32 +26,29 @@ class SimpleNote:
 
 class Frame:
     timestamp: int
-
-    unallocated: list[list[SimpleNote]]
-    allocated: list[list[SimpleNote]]
+    unallocated: dict[NoteType, list[SimpleNote]]
 
     def __init__(self, timestamp: int):
         self.timestamp = timestamp
 
-        self.unallocated = [[] for _ in range(4)]
-        self.allocated = [[] for _ in range(4)]
+        self.unallocated = {NoteType(i + 1): [] for i in range(4)}
 
-    def add(self, note_type: int, pos: tuple[float, float], angle: float):
+    def add(self, note_type: NoteType, pos: tuple[float, float], angle: float):
         pos = recalc_pos(pos, math.sin(angle), math.cos(angle))
-        self.unallocated[note_type - 1].append(SimpleNote(note_type, self.timestamp, pos, angle))
+        self.unallocated[note_type].append(SimpleNote(note_type, self.timestamp, pos, angle))
 
     def taps(self) -> Iterator[SimpleNote]:
-        taps = self.unallocated[Note.TAP - 1]
+        taps = self.unallocated[NoteType.TAP]
         while taps:
             yield taps.pop(0)
 
     def drags(self) -> Iterator[SimpleNote]:
-        drags = self.unallocated[Note.DRAG - 1]
+        drags = self.unallocated[NoteType.DRAG]
         while drags:
             yield drags.pop(0)
 
     def flicks(self) -> Iterator[SimpleNote]:
-        flicks = self.unallocated[Note.FLICK - 1]
+        flicks = self.unallocated[NoteType.FLICK]
         while flicks:
             yield flicks.pop(0)
 
@@ -148,8 +145,10 @@ class PointerAllocator:
         px, py = note.pos
         for off in range(flick_end - flick_start):
             offset = off + flick_start
-            px, py = note.pos[0] + math.sin(offset * math.pi / 10) * flick_scale_factor * sa, note.pos[1] + math.sin(
-                offset * math.pi / 10) * flick_scale_factor * ca
+            px, py = (
+                note.pos[0] + math.sin(offset * math.pi / 10) * flick_scale_factor * sa,
+                note.pos[1] + math.sin(offset * math.pi / 10) * flick_scale_factor * ca,
+            )
             self._insert(self.now, VirtualTouchEvent((px, py), TouchAction.MOVE, pointer.id))
         note.pos = (px, py)
         pointer.note = note
@@ -165,7 +164,6 @@ class PointerAllocator:
         pointer.age = 0
 
     def allocate(self, frame: Frame):
-
         # 更新pointer age
         self.now = frame.timestamp
         if self.last_timestamp is not None:
@@ -208,18 +206,16 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
             ms = round(line.seconds(note.time) * 1000)
             off_x = note.x * 72
             x, y = line.pos(note.time)
-            alpha = - line.angle(note.time) * math.pi / 180
+            alpha = -line.angle(note.time) * math.pi / 180
             pos = x + off_x * math.cos(alpha), y + off_x * math.sin(alpha)
-            if note.type == Note.HOLD:
+            if note.type == NoteType.HOLD:
                 hold_ms = math.ceil(line.seconds(note.hold) * 1000)
-                frames[ms].add(Note.TAP, pos, alpha)
+                frames[ms].add(NoteType.TAP, pos, alpha)
                 for offset in range(1, hold_ms + 1):
-                    alpha = - line.angle(line.time((ms + offset) / 1000)) * math.pi / 180
-                    frames[ms + offset].add(Note.DRAG,
-                                            line.pos_of(note, line.time((ms + offset) / 1000)),
-                                            alpha)
-            elif note.type == Note.FLICK:
-                frames[ms + flick_start].add(Note.FLICK, pos, alpha)
+                    alpha = -line.angle(line.time((ms + offset) / 1000)) * math.pi / 180
+                    frames[ms + offset].add(NoteType.DRAG, line.pos_of(note, line.time((ms + offset) / 1000)), alpha)
+            elif note.type == NoteType.FLICK:
+                frames[ms + flick_start].add(NoteType.FLICK, pos, alpha)
             else:
                 frames[ms].add(note.type, pos, alpha)
 
