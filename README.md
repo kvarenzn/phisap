@@ -32,7 +32,7 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
     + 注意：Python 3.11目前会有安装依赖方面的问题，所以请不要使用Python 3.11来运行phisap
 1. 使用`pip install -r requirements.txt`安装依赖
 2. 请安装`Android Debug Bridge`，**要求版本号至少为`1.0.41`**，并确保相应的环境变量已经配置好。
-3. 请准备Phigros的游戏安装包。目前支持v2.0.0至v2.1.1。**更新：已修复2.5.1愚人节版本的解包问题，不过并没有测试谱面规划算法是否可用**
+3. 请准备Phigros的游戏安装包。目前支持v2.0.0至v2.1.1。**更新：已修复3.0.0版本的解包问题，不过并没有测试谱面规划算法是否可用**
 	+ 可以使用如下命令从安卓设备上提取安装包
 		```bash
 		adb pull $(adb shell pm path com.PigeonGames.Phigros | cut -f2 -d:) ./Phigros.apk

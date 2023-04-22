@@ -146,6 +146,7 @@ class ClassID(Enum):
     TRANSFORM = 4
     MATERIAL = 21
     TEXTURE_2D = 28
+    MESH = 43
     SHADER = 48
     TEXT_ASSET = 49
     ANIMATION_CLIP = 74
@@ -164,6 +165,7 @@ class ClassID(Enum):
     CANVAS_RENDERER = 222
     CANVAS = 223
     RECT_TRANSFORM = 224
+    CANVAS_GROUP = 225
 
 
 class SerializedType:
