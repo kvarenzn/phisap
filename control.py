@@ -14,7 +14,7 @@ class DeviceController:
     video_socket: socket.socket
     control_socket: socket.socket
     server_process: subprocess.Popen
-    garbage_collector: threading.Thread
+    streaming_collector: threading.Thread
     device_width: int
     device_height: int
     collector_running: bool
@@ -54,8 +54,6 @@ class DeviceController:
             ['adb', 'reverse', '--remove', f'localabstract:scrcpy_{self.session_id}']
         )  # 移除创建的adb tunnel，我们不再需要它了
 
-        # 读取服务端发送的dummy byte，确认连接成功
-
         self.collector_running = True
 
         def collector():
@@ -94,8 +92,8 @@ class DeviceController:
 
         print('[client]', f'device_size = {self.device_width}x{self.device_height}, codec_id = {_codec_id}')
 
-        self.garbage_collector = threading.Thread(target=collector, daemon=True)
-        self.garbage_collector.start()
+        self.streaming_collector = threading.Thread(target=collector, daemon=True)
+        self.streaming_collector.start()
 
         self.control_collector = threading.Thread(target=ctrlmsg_receiver, daemon=True)
         self.control_collector.start()
@@ -104,7 +102,7 @@ class DeviceController:
         self.control_socket.send(
             struct.pack(
                 '!bbQiiHHHII',
-                2,
+                2,  # type: SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT
                 action.value,
                 pointer_id,
                 x,
@@ -112,8 +110,8 @@ class DeviceController:
                 self.device_width,
                 self.device_height,
                 0xFFFF,  # pressure
-                1,  # action_button
-                1,  # buttons
+                1,  # action_button: AMOTION_EVENT_BUTTON_PRIMARY
+                1,  # buttons: AMOTION_EVENT_BUTTON_PRIMARY
             )
         )
 
