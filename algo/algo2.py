@@ -35,18 +35,21 @@ class Frame:
 
     def taps(self) -> Iterator[PlainNote]:
         taps = self.unallocated[NoteType.TAP]
-        while taps:
-            yield taps.pop(0)
+        for tap in taps:
+            yield tap
+        taps.clear()
 
     def drags(self) -> Iterator[PlainNote]:
         drags = self.unallocated[NoteType.DRAG]
-        while drags:
-            yield drags.pop(0)
+        for drag in drags:
+            yield drag
+        drags.clear()
 
     def flicks(self) -> Iterator[PlainNote]:
         flicks = self.unallocated[NoteType.FLICK]
-        while flicks:
-            yield flicks.pop(0)
+        for flick in flicks:
+            yield flick
+        flicks.clear()
 
 
 class Frames:

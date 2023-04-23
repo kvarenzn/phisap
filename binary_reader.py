@@ -1,13 +1,14 @@
 import io
 from io import SEEK_CUR, SEEK_END
-from typing import IO
+from typing import IO, Literal
 from struct import unpack
 
 
 class BinaryReader:
     _stream: IO[bytes]
     _format_head: str
-    _header_backup: str | None
+    _big_endian: bool
+    _byte_order: Literal['big'] | Literal['little']
 
     def __init__(self, stream: IO[bytes] | bytes | bytearray, big_endian: bool = True):
         if isinstance(stream, (bytes, bytearray)):
@@ -15,8 +16,7 @@ class BinaryReader:
         else:
             self._stream = stream
             self._stream.seek(0)
-        self._format_head = '>' if big_endian else '<'
-        self._header_backup = None
+        self.big_endian = big_endian
 
     @property
     def boolean(self) -> bool:
@@ -41,11 +41,17 @@ class BinaryReader:
 
     @property
     def big_endian(self) -> bool:
-        return self._format_head == '>'
+        return self._big_endian
 
     @big_endian.setter
     def big_endian(self, big_endian: bool):
-        self._format_head = '>' if big_endian else '<'
+        self._big_endian = big_endian
+        if big_endian:
+            self._format_head = '>'
+            self._byte_order = 'big'
+        else:
+            self._format_head = '<'
+            self._byte_order = 'little'
 
     def offset(self, offset: int) -> 'BinaryReader':
         self._stream.seek(offset)
@@ -98,40 +104,41 @@ class BinaryReader:
 
     @property
     def i8(self) -> int:
-        return unpack(self._format_head + 'b', self._stream.read(1))[0]
+        return int.from_bytes(self._stream.read(1), self._byte_order, signed=True)
 
     @property
     def u8(self) -> int:
-        return unpack(self._format_head + 'B', self._stream.read(1))[0]
+        return int.from_bytes(self._stream.read(1), self._byte_order)
 
     @property
     def i16(self) -> int:
-        return unpack(self._format_head + 'h', self._stream.read(2))[0]
+        return int.from_bytes(self._stream.read(2), self._byte_order, signed=True)
 
     @property
     def u16(self) -> int:
-        return unpack(self._format_head + 'H', self._stream.read(2))[0]
+        return int.from_bytes(self._stream.read(2), self._byte_order)
 
     @property
     def i32(self) -> int:
-        return unpack(self._format_head + 'i', self._stream.read(4))[0]
+        return int.from_bytes(self._stream.read(4), self._byte_order, signed=True)
 
     @property
     def u32(self) -> int:
-        return unpack(self._format_head + 'I', self._stream.read(4))[0]
+        return int.from_bytes(self._stream.read(4), self._byte_order)
 
     @property
     def i64(self) -> int:
-        return unpack(self._format_head + 'q', self._stream.read(8))[0]
+        return int.from_bytes(self._stream.read(8), self._byte_order, signed=True)
 
     @property
     def u64(self) -> int:
-        return unpack(self._format_head + 'Q', self._stream.read(8))[0]
+        return int.from_bytes(self._stream.read(8), self._byte_order)
 
     def __enter__(self):
         return self
 
     def __exit__(self, *_):
         pass
+
 
 __all__ = ['BinaryReader']
