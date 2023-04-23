@@ -6,6 +6,11 @@ class TouchAction(Enum):
     DOWN = 0
     UP = 1
     MOVE = 2
+    CANCEL = 3
+    OUTSIDE = 4
+    POINTER_DOWN = 5
+    POINTER_UP = 6
+    HOVER_MOVE = 7
 
 
 class VirtualTouchEvent(NamedTuple):

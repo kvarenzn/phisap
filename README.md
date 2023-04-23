@@ -38,11 +38,11 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
 		```bash
 		adb pull $(adb shell pm path com.PigeonGames.Phigros | cut -f2 -d:) ./Phigros.apk
 		```
-4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v1.25`。下载完成后，请将文件直接放置在phisap的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则phisap将无法识别。
+4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v2.0`，不要下载成别的版本。下载完成后，请将文件直接放置在phisap的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则phisap将无法识别。
     + 如果你使用*nix系统，且安装有wget，那么下面的命令与上面描述的操作等效:
         ```bash
         cd phisap  # 定位到phisap的根目录下
-        wget https://github.com/Genymobile/scrcpy/releases/download/v1.25/scrcpy-server-v1.25
+        wget https://github.com/Genymobile/scrcpy/releases/download/v1.25/scrcpy-server-v2.0
         ```
 
 ### 运行

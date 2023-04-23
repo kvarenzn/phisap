@@ -271,12 +271,13 @@ class App(ttk.Frame):
             if self.controller is None:
                 self.controller = DeviceController()
 
-            device_size = self.controller.device_size
+            device_width = self.controller.device_width
+            device_height = self.controller.device_height
 
-            height = device_size[1]
+            height = device_height
             width = height * 16 // 9
-            xoffset = (device_size[0] - width) // 2
-            yoffset = (device_size[1] - height) // 2
+            xoffset = (device_width - width) >> 1
+            yoffset = (device_height - height) >> 1
             scale_factor = height / 720
 
             adapted_ans = [
@@ -296,7 +297,7 @@ class App(ttk.Frame):
             delay_offset.set(0)
 
             if self.sync_mode.get() == 0:
-                self.controller.tap(device_size[0] // 2, device_size[1] // 2)
+                self.controller.tap(device_width >> 1, device_height >> 1)
                 offset = self.delay.get()
 
                 self.info_label['text'] = '准备就绪'
@@ -335,7 +336,7 @@ class App(ttk.Frame):
                                 self.info_label['text'] = '开始操作'
                                 begin = True
                             for ev in ces:
-                                self.controller.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+                                self.controller.touch(*ev.pos, ev.action, pointer_id=ev.pointer)
                             ce_ms, ces = next(ans_iter)
                 except Exception:
                     pass
@@ -387,7 +388,7 @@ class App(ttk.Frame):
                         self.controller = DeviceController()
 
                     for ev in ces:
-                        self.controller.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+                        self.controller.touch(*ev.pos, ev.action, pointer_id=ev.pointer)
                     ce_ms, ces = next(ans_iter)
 
                     try:
@@ -396,7 +397,7 @@ class App(ttk.Frame):
                             now = round((time.time() - self.start_time) * 1000)
                             if now >= ce_ms:
                                 for ev in ces:
-                                    self.controller.touch(*ev.pos, ev.action.value, pointer_id=ev.pointer)
+                                    self.controller.touch(*ev.pos, ev.action, pointer_id=ev.pointer)
                                 ce_ms, ces = next(ans_iter)
                     except Exception:
                         pass
