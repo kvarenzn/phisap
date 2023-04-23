@@ -3,7 +3,9 @@
 """
 import math
 from sys import stdout
-from typing import Optional, Iterator
+from typing import Iterator
+from dataclasses import dataclass
+from collections import defaultdict
 
 from chart import Chart
 from note import NoteType
@@ -11,43 +13,37 @@ from utils import recalc_pos
 from .algo_base import TouchAction, VirtualTouchEvent
 
 
-class SimpleNote:
+@dataclass
+class PlainNote:
     note_type: int
     timestamp: int
     pos: tuple[float, float]
     angle: float
 
-    def __init__(self, note_type: int, timestamp: int, pos: tuple[float, float], angle: float):
-        self.note_type = note_type
-        self.timestamp = timestamp
-        self.pos = pos
-        self.angle = angle
-
 
 class Frame:
     timestamp: int
-    unallocated: dict[NoteType, list[SimpleNote]]
+    unallocated: defaultdict[NoteType, list[PlainNote]]
 
     def __init__(self, timestamp: int):
         self.timestamp = timestamp
-
-        self.unallocated = {NoteType(i + 1): [] for i in range(4)}
+        self.unallocated = defaultdict(list)
 
     def add(self, note_type: NoteType, pos: tuple[float, float], angle: float):
         pos = recalc_pos(pos, math.sin(angle), math.cos(angle))
-        self.unallocated[note_type].append(SimpleNote(note_type, self.timestamp, pos, angle))
+        self.unallocated[note_type].append(PlainNote(note_type, self.timestamp, pos, angle))
 
-    def taps(self) -> Iterator[SimpleNote]:
+    def taps(self) -> Iterator[PlainNote]:
         taps = self.unallocated[NoteType.TAP]
         while taps:
             yield taps.pop(0)
 
-    def drags(self) -> Iterator[SimpleNote]:
+    def drags(self) -> Iterator[PlainNote]:
         drags = self.unallocated[NoteType.DRAG]
         while drags:
             yield drags.pop(0)
 
-    def flicks(self) -> Iterator[SimpleNote]:
+    def flicks(self) -> Iterator[PlainNote]:
         flicks = self.unallocated[NoteType.FLICK]
         while flicks:
             yield flicks.pop(0)
@@ -73,32 +69,32 @@ class Frames:
 
 class Pointer:
     id: int
-    note: Optional[SimpleNote]
+    note: PlainNote | None
     age: int
 
-    def __init__(self, pid: int, note: Optional[SimpleNote] = None, age: int = 0):
+    def __init__(self, pid: int, note: PlainNote | None = None, age: int = 0):
         self.id = pid
         self.note = note
         self.age = age
 
 
-def distance_of(note1: Optional[SimpleNote], note2: SimpleNote) -> float:
-    if note1 is None:
+def distance_of(note1: PlainNote | None, note2: PlainNote | None) -> float:
+    if note1 is None or note2 is None:
         return math.inf
     x1, y1 = note1.pos
     x2, y2 = note2.pos
     return (x2 - x1) ** 2 + (y2 - y1) ** 2
 
 
-flick_start = -50
-flick_end = 50
-flick_scale_factor = 100
+FLICK_START = -50
+FLICK_END = 50
+FLICK_SCALE_FACTOR = 100
 
 
 class PointerAllocator:
     pointers: list[Pointer]
     events: dict[int, list[VirtualTouchEvent]]
-    last_timestamp: Optional[int]
+    last_timestamp: int | None
     now: int
 
     def __init__(self, max_pointers_count: int = 10, begin_at: int = 1000):
@@ -106,12 +102,12 @@ class PointerAllocator:
         self.events = {}
         self.last_timestamp = None
 
-    def alloc(self, note: SimpleNote) -> Pointer:
-        usable_pointers = [p for p in self.pointers if p.note is None or p.age > 0]
-        assert usable_pointers
-        return min(usable_pointers, key=lambda p: distance_of(p.note, note))  # 优先使用废弃的Pointer
+    def alloc(self, note: PlainNote) -> Pointer:
+        available_pointers = [p for p in self.pointers if p.note is None or p.age > 0]
+        assert available_pointers
+        return min(available_pointers, key=lambda p: distance_of(p.note, note))  # 优先使用废弃的Pointer
 
-    def check(self, note: SimpleNote) -> Optional[Pointer]:
+    def check(self, note: PlainNote) -> Pointer | None:
         ox, oy = note.pos
         ca, sa = math.cos(note.angle), math.sin(note.angle)
         for pointer in self.pointers:
@@ -128,14 +124,14 @@ class PointerAllocator:
             self.events[timestamp] = []
         self.events[timestamp].append(event)
 
-    def _tap(self, pointer: Pointer, note: SimpleNote):
+    def _tap(self, pointer: Pointer, note: PlainNote):
         if pointer.note is not None:
             self._insert(self.now - pointer.age + 1, VirtualTouchEvent(pointer.note.pos, TouchAction.UP, pointer.id))
         pointer.note = note
         pointer.age = 0
         self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
 
-    def _flick(self, pointer: Pointer, note: SimpleNote):
+    def _flick(self, pointer: Pointer, note: PlainNote):
         if pointer.note is None:
             self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
         else:
@@ -143,18 +139,18 @@ class PointerAllocator:
         alpha = note.angle
         sa, ca = math.sin(alpha), math.cos(alpha)
         px, py = note.pos
-        for off in range(flick_end - flick_start):
-            offset = off + flick_start
+        for off in range(FLICK_END - FLICK_START):
+            offset = off + FLICK_START
             px, py = (
-                note.pos[0] + math.sin(offset * math.pi / 10) * flick_scale_factor * sa,
-                note.pos[1] + math.sin(offset * math.pi / 10) * flick_scale_factor * ca,
+                note.pos[0] + math.sin(offset * math.pi / 10) * FLICK_SCALE_FACTOR * sa,
+                note.pos[1] + math.sin(offset * math.pi / 10) * FLICK_SCALE_FACTOR * ca,
             )
             self._insert(self.now, VirtualTouchEvent((px, py), TouchAction.MOVE, pointer.id))
         note.pos = (px, py)
         pointer.note = note
-        pointer.age = flick_start - flick_end
+        pointer.age = FLICK_START - FLICK_END
 
-    def _drag(self, pointer: Pointer, note: SimpleNote):
+    def _drag(self, pointer: Pointer, note: PlainNote):
         if pointer.note is None:
             self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
         else:
@@ -208,16 +204,19 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
             x, y = line.pos(note.time)
             alpha = -line.angle(note.time) * math.pi / 180
             pos = x + off_x * math.cos(alpha), y + off_x * math.sin(alpha)
-            if note.type == NoteType.HOLD:
-                hold_ms = math.ceil(line.seconds(note.hold) * 1000)
-                frames[ms].add(NoteType.TAP, pos, alpha)
-                for offset in range(1, hold_ms + 1):
-                    alpha = -line.angle(line.time((ms + offset) / 1000)) * math.pi / 180
-                    frames[ms + offset].add(NoteType.DRAG, line.pos_of(note, line.time((ms + offset) / 1000)), alpha)
-            elif note.type == NoteType.FLICK:
-                frames[ms + flick_start].add(NoteType.FLICK, pos, alpha)
-            else:
-                frames[ms].add(note.type, pos, alpha)
+            match note.type:
+                case NoteType.HOLD:
+                    hold_ms = math.ceil(line.seconds(note.hold) * 1000)
+                    frames[ms].add(NoteType.TAP, pos, alpha)
+                    for offset in range(1, hold_ms + 1):
+                        alpha = -line.angle(line.time((ms + offset) / 1000)) * math.pi / 180
+                        frames[ms + offset].add(
+                            NoteType.DRAG, line.pos_of(note, line.time((ms + offset) / 1000)), alpha
+                        )
+                case NoteType.FLICK:
+                    frames[ms + FLICK_START].add(NoteType.FLICK, pos, alpha)
+                case _:
+                    frames[ms].add(note.type, pos, alpha)
 
     print(f'统计完毕，当前谱面共计{len(frames)}帧')
 

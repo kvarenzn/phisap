@@ -363,6 +363,7 @@ class App(ttk.Frame):
                     def stop():
                         self.running = False
 
+                    self.info_label['text'] = '正在操作'
                     self.go['command'] = stop
                     self.go['text'] = '取消'
 

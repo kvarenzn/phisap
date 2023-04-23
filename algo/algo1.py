@@ -1,7 +1,10 @@
 """保守的指针规划算法"""
 
 import math
-from typing import Any
+from typing import NamedTuple
+from collections import defaultdict
+from dataclasses import dataclass
+from enum import Enum
 
 from .algo_base import TouchAction, VirtualTouchEvent
 from chart import Chart
@@ -9,27 +12,36 @@ from note import NoteType
 from utils import distance_of, recalc_pos
 
 
+@dataclass
 class Pointer:
     pid: int
     pos: tuple[float, float]
     timestamp: int
-    occupied: int
-
-    def __init__(self, pid: int, pos: tuple[float, float], timestamp: int):
-        self.pid = pid
-        self.pos = pos
-        self.timestamp = timestamp
-        self.occupied = 0
-
-    def __repr__(self):
-        return f'Pointer(pid={self.pid}, pos={self.pos}, timestamp={self.timestamp})'
+    occupied: int = 0
 
 
-class Pointers:
+class FrameEventAction(Enum):
+    TAP = 0
+    DRAG = 1
+    FLICK_START = 2
+    FLICK = 3
+    FLICK_END = 4
+    HOLD_START = 5
+    HOLD = 6
+    HOLD_END = 7
+
+
+class FrameEvent(NamedTuple):
+    action: FrameEventAction
+    point: tuple[float, float]
+    id: int
+
+
+class PointerManager:
     max_pointer_id: int
     pointers: dict[int, Pointer]
     begin: int
-    direction: int
+    delta: int
     now: int
 
     recycled: set[int]
@@ -37,57 +49,57 @@ class Pointers:
     unused_now: dict[int, Pointer]
     mark_as_released: list[int]
 
-    def __init__(self, begin: int, direction: int = 1):
+    def __init__(self, begin: int, delta: int = 1):
         self.begin = begin
         self.max_pointer_id = begin
         self.pointers = {}
         self.recycled = set()
         self.unused = {}
-        self.direction = direction
+        self.delta = delta
         self.unused_now = {}
         self.mark_as_released = []
 
     def _new(self) -> int:
         if not self.recycled:
             pid = self.max_pointer_id
-            self.max_pointer_id += self.direction
+            self.max_pointer_id += self.delta
             return pid
         return self.recycled.pop()
 
     def _del(self, pointer_id: int):
         self.recycled.add(pointer_id)
-        if len(self.recycled) == (self.max_pointer_id - self.begin) / self.direction:
+        if len(self.recycled) == (self.max_pointer_id - self.begin) / self.delta:
             self.max_pointer_id = self.begin
             self.recycled.clear()
 
-    def acquire(self, note: dict[str, Any], new: bool = True) -> tuple[int, bool]:
-        event_id = note['i']
+    def acquire(self, event: FrameEvent, new: bool = True) -> tuple[int, bool]:
+        event_id = event.id
         if event_id in self.pointers:
             ptr = self.pointers[event_id]
             ptr.timestamp = self.now
-            ptr.pos = note['p']
+            ptr.pos = event.point
             return ptr.pid, False
         if not new:
             nearest_distance = 200
             nearest_pid = None
             for pid, ptr in self.unused.items():
-                if (d := distance_of(note['p'], ptr.pos)) < nearest_distance:
+                if (d := distance_of(event.point, ptr.pos)) < nearest_distance:
                     nearest_pid = ptr.pid
                     nearest_distance = d
             if nearest_pid is not None:
                 ptr = self.unused[nearest_pid]
                 del self.unused[nearest_pid]
                 ptr.timestamp = self.now
-                ptr.pos = note['p']
+                ptr.pos = event.point
                 ptr.occupied = 0
                 self.pointers[event_id] = ptr
                 return ptr.pid, False
         pid = self._new()
-        self.pointers[event_id] = Pointer(pid, note['p'], self.now)
+        self.pointers[event_id] = Pointer(pid, event.point, self.now)
         return pid, True
 
-    def release(self, note: dict[str, Any]):
-        event_id = note['i']
+    def release(self, event: FrameEvent):
+        event_id = event.id
         if event_id in self.pointers:
             ptr = self.pointers[event_id]
             self.unused_now[ptr.pid] = ptr
@@ -112,7 +124,8 @@ class Pointers:
 
         if len(self.unused) + len(self.pointers) > 10:
             raise RuntimeError(
-                f'unused: {len(self.unused)} & pointers: {len(self.pointers)} are on screen @ {self.now}')
+                f'unused: {len(self.unused)} & pointers: {len(self.pointers)} are on screen @ {self.now}'
+            )
 
     def finish(self):
         for ptr in self.unused.values():
@@ -124,139 +137,121 @@ class Pointers:
 
 
 def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
-    flick_start = -30
-    flick_end = 30
-    flick_scale_factor = 100
+    FLICK_START = -30
+    FLICK_END = 30
+    FLICK_SCALE_FACTOR = 100
 
-    frames: dict[int, list] = {}
-    result: dict[int, list[VirtualTouchEvent]] = {}
+    frames: defaultdict[int, list[FrameEvent]] = defaultdict(list)
 
-    def insert(milliseconds: int, event: dict):
-        if milliseconds not in frames:
-            frames[milliseconds] = []
-        frames[milliseconds].append(event)
-
-    def ins(milliseconds: int, event: VirtualTouchEvent):
-        if milliseconds not in result:
-            result[milliseconds] = []
-        result[milliseconds].append(event)
+    def add_frame_event(milliseconds: int, action: FrameEventAction, point: tuple[float, float], id: int):
+        frames[milliseconds].append(FrameEvent(action, point, id))
 
     current_event_id = 0
 
     def flick_pos(px: float, py: float, offset: int) -> tuple[float, float]:
-        return px + math.sin(offset * math.pi / 10) * flick_scale_factor * sa, py + math.sin(
-            offset * math.pi / 10) * flick_scale_factor * ca
+        return (
+            px + math.sin(offset * math.pi / 10) * FLICK_SCALE_FACTOR * sa,
+            py + math.sin(offset * math.pi / 10) * FLICK_SCALE_FACTOR * ca,
+        )
 
     print('正在统计帧...', end='')
 
     # 统计frames
     for line in chart.judge_lines:
-        for note in line.notes_above + line.notes_below:
-            ms = round(line.seconds(note.time) * 1000)
-            off_x = note.x * 72
-            x, y = line.pos(note.time)
-            alpha = - line.angle(note.time) * math.pi / 180
+        for event in line.notes_above + line.notes_below:
+            ms = round(line.seconds(event.time) * 1000)
+            off_x = event.x * 72
+            x, y = line.pos(event.time)
+            alpha = -line.angle(event.time) * math.pi / 180
             sa = math.sin(alpha)
             ca = math.cos(alpha)
             px, py = x + off_x * ca, y + off_x * sa
 
-            if note.type == NoteType.TAP:
-                insert(ms, {
-                    'a': 'tap',
-                    'p': recalc_pos((px, py), sa, ca),
-                    'i': current_event_id
-                })
-            elif note.type == NoteType.DRAG:
-                insert(ms, {
-                    'a': 'drag',
-                    'p': recalc_pos((px, py), sa, ca),
-                    'i': current_event_id
-                })
-            elif note.type == NoteType.FLICK:
-                insert(ms + flick_start, {
-                    'a': 'flick_start',
-                    # 'p': flick_pos(*line.pos_of(note, line.time(ms + flick_start) / 1000), flick_start),
-                    'p': recalc_pos(flick_pos(px, py, flick_start), sa, ca),
-                    'i': current_event_id
-                })
-                for offset in range(flick_start + 1, flick_end):
-                    insert(ms + offset, {
-                        'a': 'flick',
-                        # 'p': flick_pos(*line.pos_of(note, line.time(ms + offset) / 1000), offset),
-                        'p': recalc_pos(flick_pos(px, py, offset), sa, ca),
-                        'i': current_event_id
-                    })
-                insert(ms + flick_end, {
-                    'a': 'flick_end',
-                    # 'p': flick_pos(*line.pos_of(note, line.time(ms + flick_end) / 1000), flick_end),
-                    'p': recalc_pos(flick_pos(px, py, flick_end), sa, ca),
-                    'i': current_event_id
-                })
-            elif note.type == NoteType.HOLD:
-                hold_ms = math.ceil(line.seconds(note.hold) * 1000)
-                insert(ms, {
-                    'a': 'hold_start',
-                    'p': recalc_pos((px, py), sa, ca),
-                    'i': current_event_id
-                })
-                for offset in range(1, hold_ms):
-                    insert(ms + offset, {
-                        'a': 'hold',
-                        'p': recalc_pos(line.pos_of(note, line.time((ms + offset) / 1000)), sa, ca),
-                        'i': current_event_id
-                    })
-                insert(ms + hold_ms, {
-                    'a': 'hold_end',
-                    'p': recalc_pos(line.pos_of(note, line.time((ms + hold_ms) / 1000)), sa, ca),
-                    'i': current_event_id
-                })
+            match event.type:
+                case NoteType.TAP:
+                    add_frame_event(ms, FrameEventAction.TAP, recalc_pos((px, py), sa, ca), current_event_id)
+                case NoteType.DRAG:
+                    add_frame_event(ms, FrameEventAction.DRAG, recalc_pos((px, py), sa, ca), current_event_id)
+                case NoteType.FLICK:
+                    add_frame_event(
+                        ms + FLICK_START,
+                        FrameEventAction.FLICK_START,
+                        recalc_pos(flick_pos(px, py, FLICK_START), sa, ca),
+                        current_event_id,
+                    )
+                    for offset in range(FLICK_START + 1, FLICK_END):
+                        add_frame_event(
+                            ms + offset,
+                            FrameEventAction.FLICK,
+                            recalc_pos(flick_pos(px, py, offset), sa, ca),
+                            current_event_id,
+                        )
+                    add_frame_event(
+                        ms + FLICK_END,
+                        FrameEventAction.FLICK_END,
+                        recalc_pos(flick_pos(px, py, FLICK_END), sa, ca),
+                        current_event_id,
+                    )
+                case NoteType.HOLD:
+                    hold_ms = math.ceil(line.seconds(event.hold) * 1000)
+                    add_frame_event(ms, FrameEventAction.HOLD_START, recalc_pos((px, py), sa, ca), current_event_id)
+                    for offset in range(1, hold_ms):
+                        add_frame_event(
+                            ms + offset,
+                            FrameEventAction.HOLD,
+                            recalc_pos(line.pos_of(event, line.time((ms + offset) / 1000)), sa, ca),
+                            current_event_id,
+                        )
+                    add_frame_event(
+                        ms + hold_ms,
+                        FrameEventAction.FLICK_END,
+                        recalc_pos(line.pos_of(event, line.time((ms + hold_ms) / 1000)), sa, ca),
+                        current_event_id,
+                    )
             current_event_id += 1
 
     print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
-    pointers = Pointers(0)
+    pointers = PointerManager(0)
+
+    result: defaultdict[int, list[VirtualTouchEvent]] = defaultdict(list)
+
+    def add_touch_event(milliseconds: int, pos: tuple[float, float], action: TouchAction, pointer_id: int):
+        result[milliseconds].append(VirtualTouchEvent(pos, action, pointer_id))
 
     print('正在规划触控事件...', end='')
     for ms, frame in sorted(frames.items()):
         pointers.now = ms
         is_keyframe = False
-        for note in frame:
-            action = note['a']
-            if action == 'tap':
-                ins(ms, VirtualTouchEvent(note['p'], TouchAction.DOWN, pointers.acquire(note)[0]))
-                pointers.release(note)
-                is_keyframe = True
-
-            elif action == 'drag':
-                pid, new = pointers.acquire(note, new=False)
-                act = TouchAction.DOWN if new else TouchAction.MOVE
-                ins(ms, VirtualTouchEvent(note['p'], act, pid))
-                pointers.release(note)
-                # is_keyframe = True
-
-            elif action == 'flick_start':
-                pid, new = pointers.acquire(note, new=False)
-                act = TouchAction.DOWN if new else TouchAction.MOVE
-                ins(ms, VirtualTouchEvent(note['p'], act, pid))
-            elif action == 'flick':
-                ins(ms, VirtualTouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
-            elif action == 'flick_end':
-                ins(ms, VirtualTouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
-                pointers.release(note)
-
-            elif action == 'hold_start':
-                ins(ms, VirtualTouchEvent(note['p'], TouchAction.DOWN, pointers.acquire(note)[0]))
-                is_keyframe = True
-            elif action == 'hold':
-                ins(ms, VirtualTouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
-            elif action == 'hold_end':
-                ins(ms, VirtualTouchEvent(note['p'], TouchAction.MOVE, pointers.acquire(note)[0]))
-                pointers.release(note)
+        for event in frame:
+            match event.action:
+                case FrameEventAction.TAP:
+                    add_touch_event(ms, event.point, TouchAction.DOWN, pointers.acquire(event)[0])
+                    pointers.release(event)
+                    is_keyframe = True
+                case FrameEventAction.DRAG:
+                    pid, new = pointers.acquire(event, new=False)
+                    act = TouchAction.DOWN if new else TouchAction.MOVE
+                    add_touch_event(ms, event.point, act, pid)
+                    pointers.release(event)
+                    # is_keyframe = True
+                case FrameEventAction.FLICK_START:
+                    pid, new = pointers.acquire(event, new=False)
+                    act = TouchAction.DOWN if new else TouchAction.MOVE
+                    add_touch_event(ms, event.point, act, pid)
+                case FrameEventAction.FLICK | FrameEventAction.HOLD:
+                    add_touch_event(ms, event.point, TouchAction.MOVE, pointers.acquire(event)[0])
+                case FrameEventAction.FLICK_END | FrameEventAction.HOLD_END:
+                    add_touch_event(ms, event.point, TouchAction.MOVE, pointers.acquire(event)[0])
+                    pointers.release(event)
+                case FrameEventAction.HOLD_START:
+                    add_touch_event(ms, event.point, TouchAction.DOWN, pointers.acquire(event)[0])
+                    is_keyframe = True
 
         for pid, ts, pos in pointers.recycle(is_keyframe):
-            ins(ts, VirtualTouchEvent(pos, TouchAction.UP, pid))
+            add_touch_event(ts, pos, TouchAction.UP, pid)
 
     for pid, ts, pos in pointers.finish():
-        ins(ts, VirtualTouchEvent(pos, TouchAction.UP, pid))
+        add_touch_event(ts, pos, TouchAction.UP, pid)
     print('规划完毕.')
     return result
