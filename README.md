@@ -42,7 +42,7 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
     + 如果你使用*nix系统，且安装有wget，那么下面的命令与上面描述的操作等效:
         ```bash
         cd phisap  # 定位到phisap的根目录下
-        wget https://github.com/Genymobile/scrcpy/releases/download/v1.25/scrcpy-server-v2.0
+        wget https://github.com/Genymobile/scrcpy/releases/download/v2.0/scrcpy-server-v2.0
         ```
 
 ### 运行
