@@ -115,6 +115,7 @@ PS: 如果你知道怎样实现不root的前提下精确获知当前曲目进度
 | --------------------- | ---- | -------- |
 | Protoflicker          | IN   | 1 miss   |
 | You are the Miserable | AT   | 1 miss   |
+| Stasis                | AT   | 1 miss   |
 
 #### Kalpa
 
