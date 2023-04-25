@@ -70,15 +70,11 @@ class Frames:
         return len(self.frames)
 
 
+@dataclass
 class Pointer:
     id: int
-    note: PlainNote | None
-    age: int
-
-    def __init__(self, pid: int, note: PlainNote | None = None, age: int = 0):
-        self.id = pid
-        self.note = note
-        self.age = age
+    note: PlainNote | None = None
+    age: int = 0
 
 
 def distance_of(note1: PlainNote | None, note2: PlainNote | None) -> float:
@@ -96,13 +92,13 @@ FLICK_SCALE_FACTOR = 100
 
 class PointerAllocator:
     pointers: list[Pointer]
-    events: dict[int, list[VirtualTouchEvent]]
+    events: defaultdict[int, list[VirtualTouchEvent]]
     last_timestamp: int | None
     now: int
 
     def __init__(self, max_pointers_count: int = 10, begin_at: int = 1000):
         self.pointers = [Pointer(i + begin_at) for i in range(max_pointers_count)]
-        self.events = {}
+        self.events = defaultdict(list)
         self.last_timestamp = None
 
     def alloc(self, note: PlainNote) -> Pointer:
@@ -123,8 +119,6 @@ class PointerAllocator:
         return None
 
     def _insert(self, timestamp: int, event: VirtualTouchEvent):
-        if timestamp not in self.events:
-            self.events[timestamp] = []
         self.events[timestamp].append(event)
 
     def _tap(self, pointer: Pointer, note: PlainNote):

@@ -91,7 +91,16 @@ PS: 如果你知道怎样实现不root的前提下精确获知当前曲目进度
 
 全φ
 
-#### _Chapter 8_
+#### Chapter 8
+
+| 曲目              | 难度 | 最佳成绩 |
+| ----------------- | ---- | -------- |
+| DESTRUCTION 3,2,1 | IN   | 3 miss   |
+
+注：本章中下列曲目需要使用algo2规划
++ Luminescence (IN)
++ DESTRUCTION 3,2,1 (AT)
++ Distorted Fate (IN, AT)
 
 #### Side story 1
 
