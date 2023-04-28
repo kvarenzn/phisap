@@ -118,7 +118,7 @@ COMMON_STRINGS = {
     1121: 'm_PrefabInstance',
     1138: 'm_PrefabAsset',
     1152: 'FileSize',
-    1161: 'Hash128'
+    1161: 'Hash128',
 }
 
 
@@ -142,6 +142,7 @@ class TypeTree:
 
 
 class ClassID(Enum):
+    UNKNOWN = -1
     OBJECT = 0
     GAME_OBJECT = 1
     TRANSFORM = 4
@@ -161,12 +162,21 @@ class ClassID(Enum):
     ASSET_BUNDLE = 142
     PARTICLE_SYSTEM = 198
     PARTICLE_SYSTEM_RENDERER = 199
+    SHADER_VARIANT_COLLECTION = 200
     SPRITE_RENDERER = 212
     SPRITE = 213
     CANVAS_RENDERER = 222
     CANVAS = 223
     RECT_TRANSFORM = 224
     CANVAS_GROUP = 225
+
+    @classmethod
+    def from_int(cls, id: int) -> 'ClassID':
+        try:
+            return cls(id)
+        except ValueError:
+            print('未知的ClassID:', id)
+            return ClassID.UNKNOWN
 
 
 class SerializedType:
@@ -309,7 +319,9 @@ class SerializedFile:
 
             if self.file_header.version < 16:
                 obj_info.class_id = ClassID(reader.u16)
-                obj_info.serialized_type = next(filter(lambda x: x and x.class_id.value == obj_info.type_id, self.types))
+                obj_info.serialized_type = next(
+                    filter(lambda x: x and x.class_id.value == obj_info.type_id, self.types)
+                )
             else:
                 t = self.types[obj_info.type_id]
                 obj_info.serialized_type = t
@@ -374,7 +386,7 @@ class SerializedFile:
 
     def _read_serialized_type(self, reader: BinaryReader, is_ref_type: bool) -> SerializedType:
         t = SerializedType()
-        t.class_id = ClassID(reader.i32)
+        t.class_id = ClassID.from_int(reader.i32)
 
         version = self.file_header.version
         if version >= 16:
@@ -387,7 +399,8 @@ class SerializedFile:
             if is_ref_type and t.script_type_index >= 0:
                 t.script_id = reader.read(16)
             elif (version < 16 and t.class_id.value < 0) or (
-                    version >= 16 and t.class_id == t.class_id == ClassID.MONO_BEHAVIOUR):
+                version >= 16 and t.class_id == t.class_id == ClassID.MONO_BEHAVIOUR
+            ):
                 t.script_id = reader.read(16)
             t.old_type_hash = reader.read(16)
 
@@ -416,11 +429,12 @@ class SerializedFile:
                 t.type_tree.string_buffer = reader.read(length)
 
                 with BinaryReader(t.type_tree.string_buffer) as buf_reader:
+
                     def read_string(offset: int) -> str:
                         if offset & 0x80000000 == 0:
                             buf_reader.pos = offset
                             return buf_reader.cstr()
-                        offset = offset & 0x7fffffff
+                        offset = offset & 0x7FFFFFFF
                         return COMMON_STRINGS.get(offset, str(offset))
 
                     for node in t.type_tree.nodes:
@@ -560,7 +574,6 @@ class Object:
 
 
 class EditorExtension(Object):
-
     def __init__(self, reader: ObjectReader):
         super().__init__(reader)
         if self.platform == -2:
@@ -638,7 +651,6 @@ class RectF:
 
 
 class Texture(NamedObject):
-
     def __init__(self, reader: ObjectReader):
         super().__init__(reader)
         version = reader.version
@@ -734,7 +746,6 @@ class Texture2D(Texture):
             self.path = reader.aligned_string()
 
     class GLTextureSettings:
-
         filter_mode: int
         aniso: int
         mip_bias: float
@@ -816,8 +827,9 @@ class Texture2D(Texture):
             self.stream_data = self.StreamingInfo(reader)
 
         if self.stream_data and self.stream_data.path:
-            self.image_data = ResourceReader.search(self.stream_data.path, self.asset_file, self.stream_data.offset,
-                                                    self.stream_data.size).get()
+            self.image_data = ResourceReader.search(
+                self.stream_data.path, self.asset_file, self.stream_data.offset, self.stream_data.size
+            ).get()
         else:
             self.image_data = reader.read(image_data_size)
 
@@ -1116,12 +1128,15 @@ class BundleFile:
             block_stream = bytearray()
 
             for block in self.blocks_info:
-                match block.flags & 0x3f:
+                match block.flags & 0x3F:
                     case 1:  # LZMA
                         raise RuntimeError('LZMA unsupported')
                     case 2 | 3:  # LZ4 | LZ4HC
-                        block_stream.extend(lz4.block.decompress(reader.read(block.compressed_size),
-                                                                 uncompressed_size=block.uncompressed_size))
+                        block_stream.extend(
+                            lz4.block.decompress(
+                                reader.read(block.compressed_size), uncompressed_size=block.uncompressed_size
+                            )
+                        )
                     case _:  # raw
                         block_stream.extend(reader.read(block.compressed_size))
 
@@ -1159,7 +1174,9 @@ class AssetsManager:
             subreader = FileReader(file.stream, reader.path.parent / pathlib.Path(file.path).name)
             subreader.pos = 0
             if subreader.file_type == FileReader.FileType.AssetsFile:
-                self.load_assets(subreader, original_path or reader.path, bundle_file.header.unity_revision, bundle_file)
+                self.load_assets(
+                    subreader, original_path or reader.path, bundle_file.header.unity_revision, bundle_file
+                )
             else:
                 self.resource_file_readers[os.path.basename(file.path)] = subreader
 
@@ -1176,6 +1193,7 @@ class AssetsManager:
         files = self.asset_files
         if console:
             from rich.progress import track
+
             files = track(files, description='正在解析文件...', console=console)
 
         for asset_file in files:
@@ -1189,36 +1207,6 @@ class AssetsManager:
                             obj = TextAsset(obj_reader)
                         case ClassID.TEXTURE_2D:
                             obj = Texture2D(obj_reader)
-                        case ClassID.SPRITE:
-                            pass
-                        case ClassID.AUDIO_CLIP:
-                            pass
-                        case ClassID.MONO_SCRIPT:
-                            pass
-                        case ClassID.MONO_BEHAVIOUR:
-                            pass
-                        case ClassID.TRANSFORM:
-                            pass
-                        case ClassID.GAME_OBJECT:
-                            pass
-                        case ClassID.CANVAS:
-                            pass
-                        case ClassID.CANVAS_RENDERER:
-                            pass
-                        case ClassID.RECT_TRANSFORM:
-                            pass
-                        case ClassID.ANIMATION_CLIP:
-                            pass
-                        case ClassID.MATERIAL:
-                            pass
-                        case ClassID.ANIMATOR_CONTROLLER:
-                            pass
-                        case ClassID.ANIMATOR:
-                            pass
-                        case ClassID.SPRITE_RENDERER:
-                            pass
-                        case ClassID.SHADER:
-                            pass
                         case ClassID.FONT:
                             obj = Font(obj_reader)
                         case _:
