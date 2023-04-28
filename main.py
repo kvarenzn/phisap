@@ -236,6 +236,9 @@ class App(ttk.Frame):
 
         return self
 
+    def detect_adb_devices(self):
+        return self
+
     def song_selected(self, event):
         songid = event.widget.get()
         difficulties = [file[6:-5] for file in os.listdir(os.path.join('./Assets/Tracks', songid)) if 'ans' not in file]
@@ -439,4 +442,4 @@ class App(ttk.Frame):
 if __name__ == '__main__':
     tk = Tk()
     tk.title('phisap')
-    App(tk).load_songs().load_cache('./cache').mainloop()
+    App(tk).load_songs().load_cache('./cache').detect_adb_devices().mainloop()

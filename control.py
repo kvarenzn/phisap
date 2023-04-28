@@ -10,6 +10,7 @@ from algo.algo_base import TouchAction
 
 
 class DeviceController:
+    serial: str | None
     session_id: str
     video_socket: socket.socket
     control_socket: socket.socket
@@ -19,20 +20,22 @@ class DeviceController:
     device_height: int
     collector_running: bool
 
-    def __init__(self, port: int = 27188, push_server: bool = True, server_dir: str = '.'):
+    def __init__(self, serial: str | None = None, port: int = 27188, push_server: bool = True, server_dir: str = '.'):
+        self.serial = serial
+        adb = ('adb',) if serial is None else ('adb', '-s', serial)
         self.session_id = format(random.randint(0, 0x7FFFFFFF), '08x')
         server_file = next(filter(lambda p: p.startswith('scrcpy-server-v'), os.listdir(server_dir)))
         server_file = os.path.join(server_dir, server_file)
         server_version = server_file.split('v')[-1]
         if push_server:
-            subprocess.run(['adb', 'push', server_file, '/data/local/tmp/scrcpy-server.jar'])
-        subprocess.run(['adb', 'reverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{port}'])
+            subprocess.run([*adb, 'push', server_file, '/data/local/tmp/scrcpy-server.jar'])
+        subprocess.run([*adb, 'reverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{port}'])
         skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         skt.bind(('localhost', port))
         skt.listen(1)
         command_line = [
-            'adb',
+            *adb,
             'shell',
             'CLASSPATH=/data/local/tmp/scrcpy-server.jar',
             'app_process',
@@ -50,7 +53,7 @@ class DeviceController:
         self.video_socket, _ = skt.accept()
         self.control_socket, _ = skt.accept()
         subprocess.run(
-            ['adb', 'reverse', '--remove', f'localabstract:scrcpy_{self.session_id}']
+            [*adb, 'reverse', '--remove', f'localabstract:scrcpy_{self.session_id}']
         )  # 移除创建的adb tunnel，我们不再需要它了
 
         self.collector_running = True
