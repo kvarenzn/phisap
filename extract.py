@@ -4,6 +4,7 @@ from enum import Enum, auto
 from typing import TypeVar, Generic, IO, Optional
 
 import lz4.block
+from rich.console import Console
 from PIL import Image
 
 from binary_reader import BinaryReader
@@ -1171,8 +1172,13 @@ class AssetsManager:
             self.asset_files.append(asset_file)
             self.asset_file_hashes.append(asset_file.path.name)
 
-    def read_assets(self):
-        for asset_file in self.asset_files:
+    def read_assets(self, console: Console | None = None):
+        files = self.asset_files
+        if console:
+            from rich.progress import track
+            files = track(files, description='正在解析文件...', console=console)
+
+        for asset_file in files:
             for object_info in asset_file.object_infos:
                 with ObjectReader(asset_file.reader, asset_file, object_info) as obj_reader:
                     obj = None

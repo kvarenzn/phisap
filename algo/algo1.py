@@ -11,6 +11,9 @@ from chart import Chart
 from note import NoteType
 from utils import distance_of, recalc_pos
 
+from rich.console import Console
+from rich.progress import track
+
 
 @dataclass
 class Pointer:
@@ -136,10 +139,10 @@ class PointerManager:
             yield ptr.pid, ptr.timestamp + 1, ptr.pos
 
 
-def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
-    FLICK_START = -30
-    FLICK_END = 30
-    FLICK_SCALE_FACTOR = 100
+def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
+    FLICK_START = -10
+    FLICK_END = 40
+    FLICK_SCALE_FACTOR = 50
 
     frames: defaultdict[int, list[FrameEvent]] = defaultdict(list)
 
@@ -150,14 +153,14 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
 
     def flick_pos(px: float, py: float, offset: int) -> tuple[float, float]:
         return (
-            px + math.sin(offset * math.pi / 10) * FLICK_SCALE_FACTOR * sa,
-            py + math.sin(offset * math.pi / 10) * FLICK_SCALE_FACTOR * ca,
+            px - (-1) ** offset * FLICK_SCALE_FACTOR * sa,
+            py + (-1) ** offset * FLICK_SCALE_FACTOR * ca,
         )
 
-    print('正在统计帧...', end='')
+    console.print('开始规划')
 
     # 统计frames
-    for line in chart.judge_lines:
+    for line in track(chart.judge_lines, description='正在统计帧...', console=console):
         for event in line.notes_above + line.notes_below:
             ms = round(line.seconds(event.time) * 1000)
             off_x = event.x * 72
@@ -210,7 +213,7 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
                     )
             current_event_id += 1
 
-    print(f'统计完毕，当前谱面共计{len(frames)}帧')
+    console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
     pointers = PointerManager(0)
 
@@ -219,8 +222,7 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
     def add_touch_event(milliseconds: int, pos: tuple[float, float], action: TouchAction, pointer_id: int):
         result[milliseconds].append(VirtualTouchEvent(pos, action, pointer_id))
 
-    print('正在规划触控事件...', end='')
-    for ms, frame in sorted(frames.items()):
+    for ms, frame in track(sorted(frames.items()), description='正在规划触控事件...', console=console):
         pointers.now = ms
         is_keyframe = False
         for event in frame:
@@ -253,5 +255,5 @@ def solve(chart: Chart) -> dict[int, list[VirtualTouchEvent]]:
 
     for pid, ts, pos in pointers.finish():
         add_touch_event(ts, pos, TouchAction.UP, pid)
-    print('规划完毕.')
+    console.print('规划完毕.')
     return result

@@ -1,3 +1,4 @@
+# 指针规划算法的基类和一些实用类型、函数
 from enum import Enum
 from typing import NamedTuple
 

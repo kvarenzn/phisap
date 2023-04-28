@@ -1,10 +1,11 @@
 import configparser
 import json
 import os
-import sys
 import zipfile
 from tkinter import ttk, messagebox, Tk, X, IntVar, StringVar, DoubleVar, filedialog, Toplevel
-from typing import Optional
+from typing import Iterator
+from algo.algo_base import TouchEvent
+from threading import Thread
 
 from catalog import Catalog
 from chart import Chart
@@ -12,8 +13,11 @@ from control import DeviceController
 from extract import AssetsManager, TextAsset
 from solve import load_from_json, export_to_json
 
+from rich.console import Console
+from rich.progress import track, Progress
 
-def extract_apk():
+
+def extract_apk(console: Console):
     apk_path = filedialog.askopenfilename(filetypes=[('安装包', '.apk')], title='请选择要解包的游戏安装包')
     if not apk_path:
         return
@@ -24,18 +28,23 @@ def extract_apk():
     popup.pack_slaves()
     popup.update()
 
+    console.print('正在读取安装包...')
     apk_file = zipfile.ZipFile(apk_path)
+    console.print('正在解析catalog.json...')
     catalog = Catalog(apk_file.open('assets/aa/catalog.json'))
     manager = AssetsManager()
-    for file in apk_file.namelist():
+    for file in track(apk_file.namelist(), description='正在加载文件...', console=console):
         if not file.startswith('assets/aa/Android'):
             continue
         with apk_file.open(file) as f:
             manager.load_file(f)
     popup.title('已加载安装包')
     popup.update()
-    manager.read_assets()
-    for file in manager.asset_files:
+    manager.read_assets(console)
+
+    popup.title('正在解包，请稍候...')
+    popup.update()
+    for file in track(manager.asset_files, description='正在写入文件...', console=console):
         assert file.parent
         filepath = file.parent.reader.path
         if filepath.name not in catalog.fname_map:
@@ -51,8 +60,6 @@ def extract_apk():
             if isinstance(obj, TextAsset):
                 with open(asset_name, 'w') as out:
                     out.write(obj.text)
-                    popup.title('正在解包，请稍候...')
-                    popup.update()
 
     popup.destroy()
 
@@ -65,12 +72,18 @@ def agreement():
 
 
 class App(ttk.Frame):
-    cache: Optional[configparser.ConfigParser]
+    cache: configparser.ConfigParser | None
+    running: bool
+    start_time: float
     controller: DeviceController | None
+    player_worker_thread: Thread | None
+    console: Console
 
     def __init__(self, master: Tk):
         super().__init__(master)
+        self.console = Console()
         self.controller = None
+        self.player_worker_thread = None
         self.cache_path = None
         self.running = True
         self.start_time = 0.0
@@ -79,7 +92,7 @@ class App(ttk.Frame):
 
         frm = ttk.Frame()
         frm.pack()
-        self.extract_btn = ttk.Button(frm, text='解包Apk', command=extract_apk)
+        self.extract_btn = ttk.Button(frm, text='解包Apk', command=lambda: extract_apk(self.console))
         self.extract_btn.pack()
 
         ttk.Separator(orient='horizontal').pack(fill=X)
@@ -179,7 +192,7 @@ class App(ttk.Frame):
                 'phisap支持从游戏安装包中解包并读取谱面文件，接下来请您选择游戏的安装包\n'
                 '另外，每当游戏更新后，您都需要重新点击"解包Apk"按钮来更新谱面库',
             )
-            extract_apk()
+            extract_apk(self.console)
             self.load_songs()
         finally:
             return self
@@ -258,12 +271,12 @@ class App(ttk.Frame):
             elif algo_method == 'algo1':
                 import algo.algo1
 
-                ans = algo.algo1.solve(chart)
+                ans = algo.algo1.solve(chart, self.console)
                 export_to_json(ans, open(ans_file, 'w'))
             elif algo_method == 'algo2':
                 import algo.algo2
 
-                ans = algo.algo2.solve(chart)
+                ans = algo.algo2.solve(chart, self.console)
                 export_to_json(ans, open(ans_file, 'w'))
             else:
                 raise RuntimeError(f'unknown algo_method: {algo_method}')
@@ -326,23 +339,22 @@ class App(ttk.Frame):
                 begin = False
                 self.running = True
 
-                ce_ms, ces = next(ans_iter)
+                timestamp, events = next(ans_iter)
                 try:
                     while self.running:
                         self.update()
                         now = round((time.time() - self.start_time) * 1000)
-                        if now >= ce_ms:
+                        if now >= timestamp:
                             if not begin:
                                 self.info_label['text'] = '开始操作'
                                 begin = True
-                            for ev in ces:
-                                self.controller.touch(*ev.pos, ev.action, pointer_id=ev.pointer)
-                            ce_ms, ces = next(ans_iter)
+                            for event in events:
+                                self.controller.touch(*event.pos, event.action, pointer_id=event.pointer)
+                            timestamp, events = next(ans_iter)
                 except Exception:
                     pass
                 finally:
-                    print('[client] INFO: 自动打歌已结束')
-                    time.sleep(0.5)  # 等待server退出
+                    self.console.print('[client] INFO: 自动打歌已结束')
 
                 self.go['command'] = pre_command
                 self.go['text'] = pre_text
@@ -360,50 +372,25 @@ class App(ttk.Frame):
 
                 self.running = True
 
-                def go_now():
-                    def stop():
-                        self.running = False
+                def player_worker(ans_iter: Iterator[tuple[int, list[TouchEvent]]]) -> None:
+                    """打歌线程"""
+                    if self.controller:
+                        timestamp, events = next(ans_iter)
+                        self.start_time = time.time() - timestamp / 1000 - 0.01  # 0.01 for the delay time
 
-                    self.info_label['text'] = '正在操作'
-                    self.go['command'] = stop
-                    self.go['text'] = '取消'
-
-                    self.delay_lbl['text'] = '微调(正为延后，负为提前)：'
-                    self.delay_input['state'] = 'normal'
-                    self.delay_input['textvariable'] = delay_offset
-
-                    ce_ms, ces = next(ans_iter)
-                    self.start_time = time.time() - ce_ms / 1000 - 0.01
-
-                    def incremented(_):
-                        self.start_time += 0.01
-
-                    def decremented(_):
-                        self.start_time -= 0.01
-
-                    self.delay_input.bind('<<Increment>>', incremented)
-                    self.delay_input.bind('<<Decrement>>', decremented)
-
-                    if self.controller is None:
-                        self.controller = DeviceController()
-
-                    for ev in ces:
-                        self.controller.touch(*ev.pos, ev.action, pointer_id=ev.pointer)
-                    ce_ms, ces = next(ans_iter)
-
-                    try:
-                        while self.running:
-                            self.update()
-                            now = round((time.time() - self.start_time) * 1000)
-                            if now >= ce_ms:
-                                for ev in ces:
-                                    self.controller.touch(*ev.pos, ev.action, pointer_id=ev.pointer)
-                                ce_ms, ces = next(ans_iter)
-                    except Exception:
-                        pass
-                    finally:
-                        print('[client] INFO: 自动打歌已结束')
-                        time.sleep(0.5)  # 等待server退出
+                        try:
+                            while self.running:
+                                now = round((time.time() - self.start_time) * 1000)
+                                if now >= timestamp:
+                                    for event in events:
+                                        self.controller.touch(*event.pos, event.action, pointer_id=event.pointer)
+                                    timestamp, events = next(ans_iter)
+                        except StopIteration:
+                            pass
+                        finally:
+                            self.console.print('打歌完毕')
+                    else:
+                        self.console.print('self.controller == None')
 
                     self.go['command'] = pre_command
                     self.go['text'] = pre_text
@@ -416,10 +403,37 @@ class App(ttk.Frame):
                     self.delay_input.unbind('<<Increment>>')
                     self.delay_input.unbind('<<Decrement>>')
 
+                self.player_worker_thread = Thread(target=player_worker, args=(ans_iter,), daemon=True)
+
+                def go_now():
+                    def stop():
+                        self.running = False
+
+                    if self.player_worker_thread is None:
+                        return
+
+                    self.player_worker_thread.start()
+                    self.info_label['text'] = '正在操作'
+                    self.go['command'] = stop
+                    self.go['text'] = '停止操作'
+
+                    self.delay_lbl['text'] = '微调(正为延后，负为提前)：'
+                    self.delay_input['state'] = 'normal'
+                    self.delay_input['textvariable'] = delay_offset
+
+                    def incremented(_):
+                        self.start_time += 0.01
+
+                    def decremented(_):
+                        self.start_time -= 0.01
+
+                    self.delay_input.bind('<<Increment>>', incremented)
+                    self.delay_input.bind('<<Decrement>>', decremented)
+
                 self.go['command'] = go_now
                 self.update()
-        except Exception as e:
-            print(e.with_traceback(sys.exc_info()[2]))
+        except Exception:
+            self.console.print_exception(show_locals=True)
 
 
 if __name__ == '__main__':
