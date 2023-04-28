@@ -24,7 +24,6 @@ class DeviceController:
         server_file = next(filter(lambda p: p.startswith('scrcpy-server-v'), os.listdir(server_dir)))
         server_file = os.path.join(server_dir, server_file)
         server_version = server_file.split('v')[-1]
-        subprocess.run(['adb', 'kill-server'])
         if push_server:
             subprocess.run(['adb', 'push', server_file, '/data/local/tmp/scrcpy-server.jar'])
         subprocess.run(['adb', 'reverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{port}'])
