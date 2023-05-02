@@ -140,9 +140,9 @@ class PointerManager:
 
 
 def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
-    FLICK_START = -10
-    FLICK_END = 40
-    FLICK_SCALE_FACTOR = 50
+    FLICK_START = -30
+    FLICK_END = 30
+    FLICK_SCALE_FACTOR = 70
 
     frames: defaultdict[int, list[FrameEvent]] = defaultdict(list)
 
