@@ -76,7 +76,7 @@ PS: 如果你知道怎样实现不root的前提下精确获知当前曲目进度
 | Snow Desert                     | IN   | 1 miss   |
 | 月下缭乱                        | IN   | 2 miss   |
 | Brave Notes                     | IN   | 2 miss   |
-| Beliieve Light (feat. 果丸哒呦) | IN   | 10 miss  |
+| Believe Light (feat. 果丸哒呦) | IN   | 10 miss  |
 
 #### Legacy
 
