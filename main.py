@@ -14,7 +14,7 @@ from extract import AssetsManager, TextAsset
 from solve import load_from_json, export_to_json
 
 from rich.console import Console
-from rich.progress import track, Progress
+from rich.progress import track
 
 
 def extract_apk(console: Console):
@@ -73,6 +73,7 @@ def agreement():
 
 class App(ttk.Frame):
     cache: configparser.ConfigParser | None
+    serials: list[str]
     running: bool
     start_time: float
     controller: DeviceController | None
@@ -94,6 +95,19 @@ class App(ttk.Frame):
         frm.pack()
         self.extract_btn = ttk.Button(frm, text='解包Apk', command=lambda: extract_apk(self.console))
         self.extract_btn.pack()
+
+        ttk.Separator(orient='horizontal').pack(fill=X)
+
+        frm = ttk.Frame()
+        frm.pack()
+
+        ttk.Label(frm, text='设备Serial: ').grid(column=0, row=0)
+        self.serial = StringVar()
+        self.serial_select = ttk.Combobox(frm, state='readonly', values=[], textvariable=self.serial)
+        self.serial_select.grid(column=1, row=0)
+        self.serial_select.bind('<<ComboboxSelected>>', self.adb_serial_selected)
+        self.serial_refresh_btn = ttk.Button(frm, text='刷新', command=self.detect_adb_devices)
+        self.serial_refresh_btn.grid(column=2, row=0)
 
         ttk.Separator(orient='horizontal').pack(fill=X)
 
@@ -237,7 +251,12 @@ class App(ttk.Frame):
         return self
 
     def detect_adb_devices(self):
+        self.serial_select['values'] = DeviceController.get_devices()
         return self
+
+    def adb_serial_selected(self, event):
+        serial = event.widget.get()
+        print(serial)
 
     def song_selected(self, event):
         songid = event.widget.get()

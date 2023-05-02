@@ -121,12 +121,21 @@ class DeviceController:
         self.touch(x, y, TouchAction.DOWN, pointer_id)
         self.touch(x, y, TouchAction.UP, pointer_id)
 
+    @staticmethod
+    def get_devices() -> list[str]:
+        ret, output = subprocess.getstatusoutput('adb devices')
+        if ret != 0:
+            return []
+        return [
+            serial
+            for serial, status in (
+                line.split('\t')
+                for line in output.splitlines()
+                if not line.startswith('*') and line != 'List of devices attached'
+            )
+            if status == 'device'
+        ]
+
 
 if __name__ == '__main__':
-    pointer_id = 114514
-    ctl = DeviceController()
-    ctl.touch(0, 0, TouchAction.DOWN, pointer_id)
-    for i in range(ctl.device_width):
-        time.sleep(0.01)
-        ctl.touch(i, i, TouchAction.MOVE, pointer_id)
-    ctl.touch(ctl.device_height, ctl.device_height, TouchAction.MOVE, pointer_id)
+    print(DeviceController.get_devices())
