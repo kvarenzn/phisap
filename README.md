@@ -17,11 +17,9 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
 <details>
 <summary>三张手机截图</summary>
 
-![截图1](./screenshots/phone-shot1.jpg)
+![AT Complete](./screenshots/phone-shot1.jpg)
 
-![截图2](./screenshots/phone-shot2.jpg)
-
-![截图3](./screenshots/phone-shot3.jpg)
+![IN Complete](./screenshots/phone-shot2.jpg)
 
 </details>
 
@@ -53,112 +51,14 @@ python main.py
 ## 注意事项
 + 虽然phisap的灵感来源为`sudo 板子自己打歌 `，不过**本程序并不依赖root权限工作**
 + 本程序的工作原理为向游戏设备发送触控事件来模拟人类游玩时的点击、长按或滑动，所以一些情况下仍有可能因误触发三指截屏或通知中心而导致miss
-+ **phisap当前支持的最高版本为3.0.1**，不过由于phisap的规划算法目前并不完善，一些谱面目前暂时无法打出金φ，这些谱面详见[暂不支持的谱面](#暂不支持的谱面)
++ **phisap当前完美支持的最高版本为3.0.1**，所有的曲目/任意难度均可以打出金φ，除了一些特殊类型的谱面（不用担心，不会影响rks）。这些谱面详见[暂不支持的谱面](#暂不支持的谱面)。不过，在使用phisap时可能会发现一些谱面无法打出100%，那么这时你需要
+    + 确保计时器同步的精确程度满足要求，如果你发现phisap打出了FULL COMBO，但并没有100%，这**一定**说明你的计时器同步没有做好
+    + 如果计时器同步没有问题，那么你可以试试换一个规划算法。目前一些谱面只能由algo1达成100%，而另一些只能由algo2达成，当然，大部分的谱面使用algo1和algo2都可以完成
+    + 如果你发现还是不行，那么你可以考虑开一个issue，跟我说明这个问题
 
 PS: 如果你知道怎样实现不root的前提下精确获知当前曲目进度，且愿意帮助本项目的话，请开issue告知我做法
 
 ## 暂不支持的谱面
-### 普通谱面
-
-<details>
-<summary>点击展开</summary>
-
-下面这些谱面由于phisap目前的规划算法限制暂时无法被打出Phi（**全部都是**因为Flick判定失效导致miss，所以说啊...）
-
-这些问题将在phisap后续的更新中被修复
-
-注：不在下面列表中的其他所有曲目均已经过测试，可以打出金phi（前提是计时器已精确同步（其实也不需要多精确，正负70ms的区间内即可
-
-#### Single
-
-| 曲目                            | 难度 | 最佳成绩 |
-| ------------------------------- | ---- | -------- |
-| Snow Desert                     | IN   | 1 miss   |
-| 月下缭乱                        | IN   | 2 miss   |
-| Brave Notes                     | IN   | 2 miss   |
-| Believe Light (feat. 果丸哒呦) | IN   | 10 miss  |
-
-#### Legacy
-
-全φ
-
-#### Chapter 5
-
-全φ
-
-#### Chapter 6
-
-全φ
-
-#### Chapter 7
-
-全φ
-
-#### Chapter 8
-
-| 曲目              | 难度 | 最佳成绩 |
-| ----------------- | ---- | -------- |
-| DESTRUCTION 3,2,1 | IN   | 3 miss   |
-
-注：本章中下列曲目需要使用algo2规划
-+ Luminescence (IN)
-+ DESTRUCTION 3,2,1 (AT)
-+ Distorted Fate (IN, AT)
-
-#### Side story 1
-
-全φ
-
-#### Side story 2
-
-| 曲目                       | 难度 | 最佳成绩           |
-| -------------------------- | ---- | ------------------ |
-| INFiNiTE ENERZY -Overdoze- | AT   | 1 miss (使用algo2) |
-
-#### 茶鸣拾贰律
-
-| 曲目          | 难度 | 最佳成绩 |
-| ------------- | ---- | -------- |
-| Feast远东之宴 | IN   | 1 miss   |
-
-#### 姜米條
-
-全φ
-
-#### Lanota
-
-| 曲目                  | 难度 | 最佳成绩 |
-| --------------------- | ---- | -------- |
-| Protoflicker          | IN   | 1 miss   |
-| You are the Miserable | AT   | 1 miss   |
-| Stasis                | AT   | 1 miss   |
-
-#### Kalpa
-
-全φ
-
-#### Muse Dash
-
-全φ
-
-#### WAVEAT
-
-全φ
-
-#### GOOD
-
-全φ
-
-#### HyuN
-
-全φ
-
-#### Rising Sun Traxx
-
-全φ
-
-</details>
-
 ### 单曲精选集中的《Random》
 
 暂时没有找到什么可以自动化判断当前谱面的办法，如果你有好的想法，请开issue。或许图像识别是一个可行的方式

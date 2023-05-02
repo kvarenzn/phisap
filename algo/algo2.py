@@ -7,8 +7,7 @@ from collections import defaultdict
 
 from chart import Chart
 from note import NoteType
-from utils import recalc_pos
-from .algo_base import TouchAction, VirtualTouchEvent
+from .algo_base import TouchAction, VirtualTouchEvent, recalc_pos, in_screen
 
 
 from rich.console import Console
@@ -142,13 +141,12 @@ class PointerAllocator:
             self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.MOVE, pointer.id))
         alpha = note.angle
         sa, ca = math.sin(alpha), math.cos(alpha)
-        px, py = note.pos
-        x, y = note.pos
+        px, py = recalc_pos(note.pos, sa, ca)  # 对于flick，需先判断是否在屏幕内判定，否则之后生成的一系列滑动事件将会被recalc_pos给映射到同一点，使得flick漏判
+        x, y = recalc_pos(note.pos, sa, ca)
         for delta in range(FLICK_DURATION):
-            offset = delta + FLICK_START
             rate = 1 - 2 * delta / FLICK_DURATION
             px, py = (x - rate * FLICK_RADIUS * sa, y + rate * FLICK_RADIUS * ca)
-            self._insert(self.now + offset, VirtualTouchEvent((px, py), TouchAction.MOVE, pointer.id))
+            self._insert(self.now + delta, VirtualTouchEvent((px, py), TouchAction.MOVE, pointer.id))
         pointer.note = note._replace(pos=(px, py))
         pointer.age = FLICK_START - FLICK_END
 
@@ -225,6 +223,22 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
                             NoteType.DRAG, line.pos_of(note, line.time((ms + offset) / 1000)), alpha
                         )
                 case NoteType.FLICK:
+                    if not in_screen(pos):
+                        # 这块的逻辑在algo1.py中有解释
+                        px, py = pos
+                        for dt in range(-3, 4):
+                            new_time = note.time + dt
+                            xx, yy = line.pos(new_time)
+                            new_alpha = -line.angle(new_time) * math.pi / 180
+                            new_sa = math.sin(new_alpha)
+                            new_ca = math.cos(new_alpha)
+                            pxx, pyy = xx + off_x * new_ca, yy + off_x * new_sa
+                            if in_screen((pxx, pyy)):
+                                console.print(f'[red]微调判定时间：flick(pos=({px, py}), time={note.time}) => flick(pos=({pxx}, {pyy}), time={new_time})[/red]')
+                                alpha = new_alpha
+                                pos = (pxx, pyy)
+                                break
+
                     frames[ms + FLICK_START].add(NoteType.FLICK, pos, alpha)
                 case _:
                     frames[ms].add(note.type, pos, alpha)

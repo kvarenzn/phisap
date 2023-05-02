@@ -6,14 +6,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 
-from .algo_base import TouchAction, VirtualTouchEvent
+from .algo_base import TouchAction, VirtualTouchEvent, distance_of, recalc_pos, in_screen
 from chart import Chart
 from note import NoteType
-from utils import distance_of, recalc_pos
 
 from rich.console import Console
 from rich.progress import track
-
 
 @dataclass
 class Pointer:
@@ -175,6 +173,44 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
                 case NoteType.DRAG:
                     add_frame_event(ms, FrameEventAction.DRAG, recalc_pos((px, py), sa, ca), current_event_id)
                 case NoteType.FLICK:
+                    if not in_screen((px, py)):
+                        # 给DESTRUCTION 3,2,1打个补丁
+                        # 这首歌的IN难度的最后一个flick是在屏幕外判定的，你敢信？
+                        # 这个flick的触发时刻为26752，然而它所在的判定线在26752时刻时的位置在(w/2, -h/2)
+                        # 然而人类是可以正常触发这个flick的判定的
+                        # 这是因为这个flick在(w/2, h/2)的位置闪了几下
+                        # 根据Phigros的判定机制，相当于这个flick可以同时在(w/2, h/2)和(w/2, -h/2)判定
+                        # 然而(w/2, -h/2)的位置不可能达到，所以相当于是在(w/2, h/2)判定了
+                        # 但是phisap是不知道这个机制的
+                        # 它遇到了(w/2, -h/2)这个flick，只会尝试使用recalc_pos在屏幕内找一个判定点
+                        # 然而这是不可能做到的，因为这个flick的偏转角度是90度，也就是说是平行于屏幕宽边的
+                        # 因此recalc_pos的算法便失效了，因为不可能计算出一个屏幕内的判定点
+                        # 为了应对这种情况，我们需要微调flick触发时间
+                        # 尝试在稍靠前或稍靠后的时间戳中找到一个判定点在屏幕内的时间戳
+                        # 对于DESTRUCTION 3,2,1，在之后的一个时间戳(26753)，判定点的位置便是(w/2, h/2)
+                        # 也就是在屏幕的中心
+                        found = False
+                        for dt in range(-3, 4):  # 查找的范围为[event.time - 3, event.time + 3]
+                            new_time = event.time + dt
+                            xx, yy = line.pos(new_time)
+                            new_alpha = -line.angle(new_time) * math.pi / 180
+                            new_sa = math.sin(new_alpha)
+                            new_ca = math.cos(new_alpha)
+                            pxx, pyy = xx + off_x * new_ca, yy + off_x * new_sa
+                            if in_screen((pxx, pyy)):
+                                found = True
+                                console.print(f'[red]微调判定时间：flick(pos=({px, py}), time={event.time}) => flick(pos=({pxx}, {pyy}), time={new_time})[/red]')
+                                x, y = xx, yy
+                                alpha = new_alpha
+                                sa, ca = new_sa, new_ca
+                                px, py = pxx, pyy
+                                break
+
+                        if not found:
+                            # 对于另外一些情况，我们没有找到这个时间戳
+                            # 这是我们假设此处使用了垂直判定机制，使用recalc_pos找到一个屏幕内的可行判定点
+                            px, py = recalc_pos((px, py), sa, ca)
+
                     add_frame_event(
                         ms + FLICK_START,
                         FrameEventAction.FLICK_START,
@@ -206,7 +242,7 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
                         )
                     add_frame_event(
                         ms + hold_ms,
-                        FrameEventAction.FLICK_END,
+                        FrameEventAction.HOLD_END,
                         recalc_pos(line.pos_of(event, line.time((ms + hold_ms) / 1000)), sa, ca),
                         current_event_id,
                     )
