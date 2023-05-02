@@ -15,7 +15,7 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
 ## 成果展示
 
 <details>
-<summary>三张手机截图</summary>
+<summary>两张手机截图</summary>
 
 ![AT Complete](./screenshots/phone-shot1.jpg)
 
