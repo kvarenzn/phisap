@@ -88,9 +88,10 @@ def distance_of(note1: PlainNote | None, note2: PlainNote | None) -> float:
     return (x2 - x1) ** 2 + (y2 - y1) ** 2
 
 
-FLICK_START = -10
-FLICK_END = 20
-FLICK_SCALE_FACTOR = 40
+FLICK_START = -30
+FLICK_END = 30
+FLICK_DURATION = FLICK_END - FLICK_START
+FLICK_RADIUS = 30
 
 
 class PointerAllocator:
@@ -143,12 +144,10 @@ class PointerAllocator:
         sa, ca = math.sin(alpha), math.cos(alpha)
         px, py = note.pos
         x, y = note.pos
-        for delta in range(FLICK_END - FLICK_START):
+        for delta in range(FLICK_DURATION):
             offset = delta + FLICK_START
-            px, py = (
-                x - math.cos(delta * math.pi) * FLICK_SCALE_FACTOR * sa,
-                y + math.cos(delta * math.pi) * FLICK_SCALE_FACTOR * ca,
-            )
+            rate = 1 - 2 * delta / FLICK_DURATION
+            px, py = (x - rate * FLICK_RADIUS * sa, y + rate * FLICK_RADIUS * ca)
             self._insert(self.now + offset, VirtualTouchEvent((px, py), TouchAction.MOVE, pointer.id))
         pointer.note = note._replace(pos=(px, py))
         pointer.age = FLICK_START - FLICK_END

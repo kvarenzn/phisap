@@ -142,7 +142,8 @@ class PointerManager:
 def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
     FLICK_START = -30
     FLICK_END = 30
-    FLICK_SCALE_FACTOR = 70
+    FLICK_DURATION = FLICK_END - FLICK_START
+    FLICK_RADIUS = 30
 
     frames: defaultdict[int, list[FrameEvent]] = defaultdict(list)
 
@@ -151,11 +152,9 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
 
     current_event_id = 0
 
-    def flick_pos(px: float, py: float, offset: int) -> tuple[float, float]:
-        return (
-            px - (-1) ** offset * FLICK_SCALE_FACTOR * sa,
-            py + (-1) ** offset * FLICK_SCALE_FACTOR * ca,
-        )
+    def flick_pos(px: float, py: float, offset: int, sina: float, cosa: float) -> tuple[float, float]:
+        rate = 1 - 2 * (offset - FLICK_START) / FLICK_DURATION
+        return (px - sina * FLICK_RADIUS * rate, py + cosa * FLICK_RADIUS * rate)
 
     console.print('开始规划')
 
@@ -179,20 +178,20 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
                     add_frame_event(
                         ms + FLICK_START,
                         FrameEventAction.FLICK_START,
-                        recalc_pos(flick_pos(px, py, FLICK_START), sa, ca),
+                        recalc_pos(flick_pos(px, py, FLICK_START, sa, ca), sa, ca),
                         current_event_id,
                     )
                     for offset in range(FLICK_START + 1, FLICK_END):
                         add_frame_event(
                             ms + offset,
                             FrameEventAction.FLICK,
-                            recalc_pos(flick_pos(px, py, offset), sa, ca),
+                            recalc_pos(flick_pos(px, py, offset, sa, ca), sa, ca),
                             current_event_id,
                         )
                     add_frame_event(
                         ms + FLICK_END,
                         FrameEventAction.FLICK_END,
-                        recalc_pos(flick_pos(px, py, FLICK_END), sa, ca),
+                        recalc_pos(flick_pos(px, py, FLICK_END, sa, ca), sa, ca),
                         current_event_id,
                     )
                 case NoteType.HOLD:
