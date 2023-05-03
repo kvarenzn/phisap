@@ -250,7 +250,7 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
 
     console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
-    pointers = PointerManager(0)
+    pointers = PointerManager(1000)
 
     result: defaultdict[int, list[VirtualTouchEvent]] = defaultdict(list)
 

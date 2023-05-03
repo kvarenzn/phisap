@@ -19,6 +19,7 @@ class DeviceController:
     device_width: int
     device_height: int
     collector_running: bool
+    pointers_record: dict[int, bool]
 
     def __init__(self, serial: str | None = None, port: int = 27188, push_server: bool = True, server_dir: str = '.'):
         self.serial = serial
@@ -100,7 +101,9 @@ class DeviceController:
         self.control_collector = threading.Thread(target=ctrlmsg_receiver, daemon=True)
         self.control_collector.start()
 
-    def touch(self, x: int, y: int, action: TouchAction, pointer_id: int = 0xFFFFFFFFFFFFFFFF):
+        self.pointers_record = {}
+
+    def touch(self, x: int, y: int, action: TouchAction, pointer_id: int):
         self.control_socket.send(
             struct.pack(
                 '!bbQiiHHHII',
@@ -117,8 +120,9 @@ class DeviceController:
             )
         )
 
-    def tap(self, x: int, y: int, pointer_id: int = 0xFFFFFFFFFFFFFFFF):
+    def tap(self, x: int, y: int, pointer_id: int = 1000, delay: float = 0.1):
         self.touch(x, y, TouchAction.DOWN, pointer_id)
+        time.sleep(delay)
         self.touch(x, y, TouchAction.UP, pointer_id)
 
     @staticmethod
@@ -139,3 +143,8 @@ class DeviceController:
 
 if __name__ == '__main__':
     print(DeviceController.get_devices())
+    controller = DeviceController()
+    device_width = controller.device_width
+    device_height = controller.device_height
+
+    controller.tap(device_width >> 1, device_height >> 1)

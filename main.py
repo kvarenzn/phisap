@@ -72,6 +72,9 @@ def agreement():
 
 
 class App(ttk.Frame):
+    SYNC_MODE_DELAY = 0
+    SYNC_MODE_MANUAL = 1
+
     cache: configparser.ConfigParser | None
     serials: list[str]
     running: bool
@@ -112,7 +115,7 @@ class App(ttk.Frame):
         ttk.Separator(orient='horizontal').pack(fill=X)
 
         self.sync_mode = IntVar()
-        self.sync_mode.set(0)
+        self.sync_mode.set(self.SYNC_MODE_MANUAL)
 
         frm = ttk.Frame()
         frm.pack()
@@ -120,13 +123,13 @@ class App(ttk.Frame):
         ttk.Label(frm, text='计时器同步方式：').grid(column=0, row=0)
 
         self.sync_mode1 = ttk.Radiobutton(
-            frm, text='延时同步', variable=self.sync_mode, value=0, command=self.sync_mode_changed
+            frm, text='延时同步', variable=self.sync_mode, value=self.SYNC_MODE_DELAY, command=self.sync_mode_changed
         )
         self.sync_mode2 = ttk.Radiobutton(
-            frm, text='手动同步', variable=self.sync_mode, value=1, command=self.sync_mode_changed
+            frm, text='手动同步', variable=self.sync_mode, value=self.SYNC_MODE_MANUAL, command=self.sync_mode_changed
         )
-        self.sync_mode1.grid(column=1, row=0)
-        self.sync_mode2.grid(column=2, row=0)
+        self.sync_mode1.grid(column=2, row=0)
+        self.sync_mode2.grid(column=1, row=0)
 
         ttk.Separator(orient='horizontal').pack(fill=X)
 
@@ -171,6 +174,7 @@ class App(ttk.Frame):
         self.delay = DoubleVar()
         self.delay_input = ttk.Spinbox(frm, increment=0.01, textvariable=self.delay, from_=-100, to=100)
         self.delay_input.grid(column=1, row=0)
+        self.delay_input['state'] = 'disabled'
 
         ttk.Label(frm, text='秒').grid(column=2, row=0)
 
@@ -181,14 +185,14 @@ class App(ttk.Frame):
 
         ttk.Separator(orient='horizontal').pack(fill=X)
 
-        self.info_label = ttk.Label(text='请开始游戏，再暂停游戏，然后再点击上面的开始按钮')
+        self.info_label = ttk.Label()
         self.info_label.pack()
 
         agreement()
 
     def sync_mode_changed(self):
         if self.sync_mode.get() == 0:  # delay
-            self.info_label['text'] = '请开始游戏，再暂停游戏，然后再点击上面的开始按钮'
+            self.info_label['text'] = 'Tip: 请开始游戏，再暂停游戏，然后再点击上面的开始按钮'
             self.delay_input['state'] = 'normal'
         else:  # tap
             self.info_label['text'] = ''
@@ -331,7 +335,7 @@ class App(ttk.Frame):
             delay_offset = DoubleVar()
             delay_offset.set(0)
 
-            if self.sync_mode.get() == 0:
+            if self.sync_mode.get() == self.SYNC_MODE_DELAY:
                 self.controller.tap(device_width >> 1, device_height >> 1)
                 offset = self.delay.get()
 
@@ -360,6 +364,7 @@ class App(ttk.Frame):
 
                 begin = False
                 self.running = True
+                self.console.print('正在等待')
 
                 timestamp, events = next(ans_iter)
                 try:
@@ -369,6 +374,7 @@ class App(ttk.Frame):
                         if now >= timestamp:
                             if not begin:
                                 self.info_label['text'] = '开始操作'
+                                self.console.print('开始操作')
                                 begin = True
                             for event in events:
                                 self.controller.touch(*event.pos, event.action, pointer_id=event.pointer)
@@ -376,7 +382,7 @@ class App(ttk.Frame):
                 except Exception:
                     pass
                 finally:
-                    self.console.print('[client] INFO: 自动打歌已结束')
+                    self.console.print('打歌完毕')
 
                 self.go['command'] = pre_command
                 self.go['text'] = pre_text
@@ -389,7 +395,7 @@ class App(ttk.Frame):
                 self.delay_input.unbind('<<Increment>>')
                 self.delay_input.unbind('<<Decrement>>')
             else:
-                self.info_label['text'] = '准备就绪\n请在第一个音符快落到判定线时，再按下上面的按钮\n可以使用空格键触发'
+                self.info_label['text'] = '准备就绪\nTip: 请在第一个音符快落到判定线时，再按下上面的按钮\n可以使用空格键触发'
                 self.go['text'] = '开始操作'
 
                 self.running = True
