@@ -17,10 +17,6 @@ class NoteType(IntEnum):
     HOLD = 3
     FLICK = 4
 
-    @property
-    def name(self) -> str:
-        return ['UNKNOWN', 'TAP', 'DRAG', 'HOLD', 'FLICK'][self.value]
-
 
 class Note:
     type: NoteType

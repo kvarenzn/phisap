@@ -11,7 +11,7 @@ class Catalog:
     entries: list[dict]
     fname_map: dict[str, str]
 
-    def __init__(self, file: IO):
+    def __init__(self, file: IO) -> None:
         data = load(file)
 
         self.buckets = []

@@ -1,3 +1,4 @@
+from typing import Self
 from note import Note
 import math
 
@@ -8,17 +9,17 @@ class SpeedEvent:
     floor: float
     value: float
 
-    def __init__(self, start_time: float, end_time: float, floor: float, value: float):
+    def __init__(self, start_time: float, end_time: float, floor: float, value: float) -> None:
         self.start_time = start_time
         self.end_time = end_time
         self.floor = floor
         self.value = value
 
     @classmethod
-    def from_dict(cls, d: dict):
+    def from_dict(cls, d: dict) -> Self:
         return cls(d['startTime'], d['endTime'], d.get('floorPosition', 0.0), d['value'])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'''SpeedEvent(start={self.start_time}, end={self.end_time}, floor={self.floor}, value={self.value})'''
 
 
@@ -30,7 +31,7 @@ class NormalEvent:
     start2: float
     end2: float
 
-    def __init__(self, start_time: float, end_time: float, start: float, end: float, start2: float, end2: float):
+    def __init__(self, start_time: float, end_time: float, start: float, end: float, start2: float, end2: float) -> None:
         self.start_time = start_time
         self.end_time = end_time
         self.start = start
@@ -39,11 +40,11 @@ class NormalEvent:
         self.end2 = end2
 
     @classmethod
-    def from_dict(cls, d: dict):
+    def from_dict(cls, d: dict) -> Self:
         return cls(d['startTime'], d['endTime'], d['start'], d['end'], d.get('start2', 0.0), d.get('end2', 0.0))
 
     @classmethod
-    def from_dict_v1(cls, d: dict):
+    def from_dict_v1(cls, d: dict) -> Self:
         start = d['start']
         end = d['end']
         return cls(
@@ -74,7 +75,7 @@ class JudgeLine:
         disappear_events: list[NormalEvent],
         move_events: list[NormalEvent],
         rotate_events: list[NormalEvent],
-    ):
+    ) -> None:
         self.notes_above = notes_above
         self.notes_below = notes_below
         self.bpm = bpm
@@ -96,7 +97,7 @@ class JudgeLine:
         )
 
     @classmethod
-    def from_dict_v1(cls, d: dict):
+    def from_dict_v1(cls, d: dict) -> Self:
         speed_events = d['speedEvents']
         current_floor = 0.0
         for ev in speed_events:

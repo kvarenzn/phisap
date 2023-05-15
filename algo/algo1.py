@@ -50,7 +50,7 @@ class PointerManager:
     unused_now: dict[int, Pointer]
     mark_as_released: list[int]
 
-    def __init__(self, begin: int, delta: int = 1):
+    def __init__(self, begin: int, delta: int = 1) -> None:
         self.begin = begin
         self.max_pointer_id = begin
         self.pointers = {}
@@ -67,7 +67,7 @@ class PointerManager:
             return pid
         return self.recycled.pop()
 
-    def _del(self, pointer_id: int):
+    def _del(self, pointer_id: int) -> None:
         self.recycled.add(pointer_id)
         if len(self.recycled) == (self.max_pointer_id - self.begin) / self.delta:
             self.max_pointer_id = self.begin
@@ -99,7 +99,7 @@ class PointerManager:
         self.pointers[event_id] = Pointer(pid, event.point, self.now)
         return pid, True
 
-    def release(self, event: FrameEvent):
+    def release(self, event: FrameEvent) -> None:
         event_id = event.id
         if event_id in self.pointers:
             ptr = self.pointers[event_id]

@@ -1,7 +1,9 @@
 # 指针规划算法的基类和一些实用类型、函数
+from typing import Self, IO
 from enum import Enum
 from typing import NamedTuple
 import math
+import json
 
 
 def distance_of(p1: tuple[float, float], p2: tuple[float, float]):
@@ -72,23 +74,29 @@ class TouchAction(Enum):
     HOVER_MOVE = 7
 
 
+class TouchEvent(NamedTuple):
+    pos: tuple[int, int]
+    action: TouchAction
+    pointer: int
+
+
 class VirtualTouchEvent(NamedTuple):
     pos: tuple[float, float]
     action: TouchAction
     pointer: int
 
-    def __str__(self):
+    def __str__(self) -> str:
         x, y = self.pos
         return f'''TouchEvent<{self.pointer} {self.action.name} @ ({x:4.2f}, {y:4.2f})>'''
 
-    def to_serializable(self):
+    def to_serializable(self) -> dict:
         return {'pos': self.pos, 'action': self.action.value, 'pointer': self.pointer}
 
     @classmethod
-    def from_serializable(cls, obj: dict) -> 'VirtualTouchEvent':
+    def from_serializable(cls, obj: dict) -> Self:
         return VirtualTouchEvent(obj['pos'], TouchAction(obj['action']), obj['pointer'])
 
-    def map_to(self, x_offset: int, y_offset: int, x_scale: float, y_scale: float) -> 'TouchEvent':
+    def map_to(self, x_offset: int, y_offset: int, x_scale: float, y_scale: float) -> TouchEvent:
         x_orig, y_orig = self.pos
         return TouchEvent(
             pos=(x_offset + round(x_orig * x_scale), y_offset + round(y_orig * y_scale)),
@@ -97,10 +105,18 @@ class VirtualTouchEvent(NamedTuple):
         )
 
 
-class TouchEvent(NamedTuple):
-    pos: tuple[int, int]
-    action: TouchAction
-    pointer: int
+def export_to_json(ans: dict[int, list[VirtualTouchEvent]], out_file: IO):
+    json.dump(
+        {timestamp: [event.to_serializable() for event in events] for timestamp, events in ans.items()},
+        out_file,
+    )
+
+
+def load_from_json(in_file: IO) -> dict[int, list[VirtualTouchEvent]]:
+    return {
+        int(ts): [VirtualTouchEvent.from_serializable(event) for event in events]
+        for ts, events in json.load(in_file).items()
+    }
 
 
 __all__ = ['TouchAction', 'VirtualTouchEvent', 'TouchEvent', 'distance_of', 'recalc_pos', 'in_screen']

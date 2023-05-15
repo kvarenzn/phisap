@@ -21,7 +21,7 @@ class DeviceController:
     collector_running: bool
     pointers_record: dict[int, bool]
 
-    def __init__(self, serial: str | None = None, port: int = 27188, push_server: bool = True, server_dir: str = '.'):
+    def __init__(self, serial: str | None = None, port: int = 27188, push_server: bool = True, server_dir: str = '.') -> None:
         self.serial = serial
         adb = ('adb',) if serial is None else ('adb', '-s', serial)
         self.session_id = format(random.randint(0, 0x7FFFFFFF), '08x')
@@ -103,7 +103,7 @@ class DeviceController:
 
         self.pointers_record = {}
 
-    def touch(self, x: int, y: int, action: TouchAction, pointer_id: int):
+    def touch(self, x: int, y: int, action: TouchAction, pointer_id: int) -> None:
         self.control_socket.send(
             struct.pack(
                 '!bbQiiHHHII',
@@ -120,7 +120,7 @@ class DeviceController:
             )
         )
 
-    def tap(self, x: int, y: int, pointer_id: int = 1000, delay: float = 0.1):
+    def tap(self, x: int, y: int, pointer_id: int = 1000, delay: float = 0.1) -> None:
         self.touch(x, y, TouchAction.DOWN, pointer_id)
         time.sleep(delay)
         self.touch(x, y, TouchAction.UP, pointer_id)

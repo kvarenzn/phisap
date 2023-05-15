@@ -31,7 +31,7 @@ class Frame:
         self.timestamp = timestamp
         self.unallocated = defaultdict(list)
 
-    def add(self, note_type: NoteType, pos: tuple[float, float], angle: float):
+    def add(self, note_type: NoteType, pos: tuple[float, float], angle: float) -> None:
         pos = recalc_pos(pos, math.sin(angle), math.cos(angle))
         self.unallocated[note_type].append(PlainNote(note_type, self.timestamp, pos, angle))
 
@@ -57,7 +57,7 @@ class Frame:
 class Frames:
     frames: dict[int, Frame]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.frames = {}
 
     def __getitem__(self, timestamp: int) -> Frame:
@@ -123,10 +123,10 @@ class PointerAllocator:
         assert available_pointers
         return min(available_pointers, key=lambda p: distance_of(p.note, note))  # 优先使用废弃的Pointer
 
-    def _insert(self, timestamp: int, event: VirtualTouchEvent):
+    def _insert(self, timestamp: int, event: VirtualTouchEvent) -> None:
         self.events[timestamp].append(event)
 
-    def _tap(self, pointer: Pointer, note: PlainNote):
+    def _tap(self, pointer: Pointer, note: PlainNote) -> None:
         if pointer.note is not None:
             # 如果分配的是"旧"指针，先抬起，再落下
             self._insert(self.now - pointer.age + 1, VirtualTouchEvent(pointer.note.pos, TouchAction.UP, pointer.id))
@@ -134,7 +134,7 @@ class PointerAllocator:
         pointer.age = 0
         self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
 
-    def _flick(self, pointer: Pointer, note: PlainNote):
+    def _flick(self, pointer: Pointer, note: PlainNote) -> None:
         if pointer.note is None:
             self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
         else:
@@ -150,7 +150,7 @@ class PointerAllocator:
         pointer.note = note._replace(pos=(px, py))
         pointer.age = FLICK_START - FLICK_END
 
-    def _drag(self, pointer: Pointer, note: PlainNote):
+    def _drag(self, pointer: Pointer, note: PlainNote) -> None:
         if pointer.note is None:
             self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
         else:
@@ -159,7 +159,7 @@ class PointerAllocator:
         pointer.note = note
         pointer.age = 0
 
-    def allocate(self, frame: Frame):
+    def allocate(self, frame: Frame) -> None:
         # 更新pointer age
         self.now = frame.timestamp
         if self.last_timestamp is not None:
@@ -187,7 +187,7 @@ class PointerAllocator:
 
         self.last_timestamp = frame.timestamp
 
-    def withdraw(self):
+    def withdraw(self) -> None:
         """收回在屏幕上的所有pointer"""
         if self.last_timestamp is None:
             return
@@ -197,12 +197,12 @@ class PointerAllocator:
             if pointer.note:
                 self._insert(final, VirtualTouchEvent(pointer.note.pos, TouchAction.UP, pointer.id))
 
-    def done(self):
+    def done(self) -> defaultdict[int, list[VirtualTouchEvent]]:
         self.withdraw()
         return self.events
 
 
-def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
+def solve(chart: Chart, console: Console) -> defaultdict[int, list[VirtualTouchEvent]]:
     frames = Frames()
 
     # 统计frames
