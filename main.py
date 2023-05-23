@@ -11,7 +11,7 @@ from catalog import Catalog
 from chart import Chart
 from control import DeviceController
 from extract import AssetsManager, TextAsset
-from solve import load_from_json, export_to_json
+from algo.algo_base import load_from_json, export_to_json
 
 from rich.console import Console
 from rich.progress import track
