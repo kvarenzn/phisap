@@ -26,15 +26,18 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
 ## 如何使用
 
 ### 准备
-0. **请安装Python 3.10或3.11**
-    + Python 3.12尚未测试，可能有一些奇怪的问题
+0. **请安装Python 3.11**
 1. 使用`pip install -r requirements.txt`安装依赖
 2. 请安装`Android Debug Bridge`，**要求版本号至少为`1.0.41`**，并确保相应的环境变量已经配置好。
 3. 请准备Phigros的游戏安装包。目前支持的游戏版本为2.0.0至3.0.1
-	+ 可以使用如下命令从安卓设备上提取安装包
+	+ 如果你使用*nix系统(如Linux或Mac OS)，则你可以使用如下的`bash shell`命令从安卓设备上提取安装包
 		```bash
 		adb pull $(adb shell pm path com.PigeonGames.Phigros | cut -f2 -d:) ./Phigros.apk
 		```
+    + 如果你使用Windows操作系统，那么你可以在`powershell`中运行下面的命令
+        ```powershell
+        adb pull (adb shell pm path com.PigeonGames.Phigros).Split(":")[1] ./Phigros.apk
+        ```
 4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v2.0`，不要下载成别的版本。下载完成后，请将文件直接放置在phisap的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则phisap将无法识别。
     + 如果你使用*nix系统，且安装有wget，那么下面的命令与上面描述的操作等效:
         ```bash
