@@ -1,11 +1,9 @@
 import os.path
 import pathlib
-from enum import Enum, auto
-from typing import TypeVar, Generic, IO, Optional
+from typing import IO, Optional
 
-import lz4.block
+from enum import Enum
 from rich.console import Console
-from PIL import Image
 
 from binary_reader import BinaryReader
 
@@ -492,37 +490,6 @@ class SerializedFile:
                 pass
 
 
-class ResourceReader:
-    need_search: bool
-    path: str
-    asset_file: SerializedFile
-    offset: int
-    size: int
-    reader: BinaryReader
-
-    def __init__(self, reader: BinaryReader, offset: int, size: int):
-        self.reader = reader
-        self.offset = offset
-        self.size = size
-
-    @classmethod
-    def search(cls, path: str, asset_file: SerializedFile, offset: int, size: int) -> 'ResourceReader':
-        resource_file_name = pathlib.Path(path).name
-        if resource_file_name in asset_file.assets_manager.resource_file_readers:
-            return ResourceReader(asset_file.assets_manager.resource_file_readers[resource_file_name], offset, size)
-        assets_file_directory = asset_file.path.parent
-        resource_file_path = assets_file_directory / resource_file_name
-        if not resource_file_path.exists():
-            raise RuntimeError(f'{resource_file_path} not exists')
-        if resource_file_path.exists():
-            raise RuntimeError(f'{resource_file_path} exists')
-        raise RuntimeError('unimplemented')
-
-    def get(self) -> bytes:
-        self.reader.pos = self.offset
-        return self.reader.read(self.size)
-
-
 class ObjectReader(BinaryReader):
     asset_file: SerializedFile
     path_id: int
@@ -577,8 +544,8 @@ class EditorExtension(Object):
     def __init__(self, reader: ObjectReader):
         super().__init__(reader)
         if self.platform == -2:
-            _prefab_parent_object = PPtr[EditorExtension](reader)
-            _prefab_internal = PPtr[Object](reader)
+            _prefab_parent_object = PPtr(reader)
+            _prefab_internal = PPtr(reader)
 
 
 class NamedObject(EditorExtension):
@@ -589,10 +556,7 @@ class NamedObject(EditorExtension):
         self.name = reader.aligned_string()
 
 
-T = TypeVar('T')
-
-
-class PPtr(Generic[T]):
+class PPtr:
     file_id: int
     path_id: int
 
@@ -611,347 +575,6 @@ class TextAsset(NamedObject):
     def __init__(self, reader: ObjectReader):
         super().__init__(reader)
         self.text = reader.string(reader.i32)
-
-
-class AssetInfo:
-    preload_index: int
-    preload_size: int
-    asset: PPtr[Object]
-
-    def __init__(self, reader: ObjectReader):
-        self.preload_index = reader.i32
-        self.preload_size = reader.i32
-        self.asset = PPtr[Object](reader)
-
-
-class AssetBundle(NamedObject):
-    preload_table: list[PPtr[Object]]
-    container: dict[str, AssetInfo]
-
-    def __init__(self, reader: ObjectReader):
-        super().__init__(reader)
-        # preload table
-        self.preload_table = [PPtr[Object](reader) for _ in range(reader.i32)]
-
-        # container
-        self.container = {reader.aligned_string(): AssetInfo(reader) for _ in range(reader.i32)}
-
-
-class RectF:
-    x: float
-    y: float
-    width: float
-    height: float
-
-    def __init__(self, reader: BinaryReader):
-        self.x = reader.f32
-        self.y = reader.f32
-        self.width = reader.f32
-        self.height = reader.f32
-
-
-class Texture(NamedObject):
-    def __init__(self, reader: ObjectReader):
-        super().__init__(reader)
-        version = reader.version
-        if version >= [2017, 3]:
-            _forced_fallback_format = reader.i32
-            _downscale_fallback = reader.boolean
-            if version >= [2020, 2]:
-                _is_alpha_channel_optional = reader.boolean
-            reader.align(4)
-
-
-class Texture2D(Texture):
-    class TextureFormat(Enum):
-        Alpha8 = 1
-        ARGB4444 = auto()
-        RGB24 = auto()
-        RGBA32 = auto()
-        ARGB32 = auto()
-        RGB565 = 7
-        R16 = 9
-        DXT1 = auto()
-        DXT5 = 12
-        RGBA4444 = auto()
-        BGRA32 = auto()
-        RHalf = auto()
-        RGHalf = auto()
-        RGBAHalf = auto()
-        RFloat = auto()
-        RGFloat = auto()
-        RGBAFloat = auto()
-        YUY2 = auto()
-        RGB9e5Float = auto()
-        BC4 = 26
-        BC5 = auto()
-        BC6H = 24
-        BC7 = auto()
-        DXT1Crunched = 28
-        DXT5Crunched = auto()
-        PVRTC_RGB2 = auto()
-        PVRTC_RGBA2 = auto()
-        PVRTC_RGB4 = auto()
-        PVRTC_RGBA4 = auto()
-        ETC_RGB4 = auto()
-        ATC_RGB4 = auto()
-        ATC_RGBA8 = auto()
-        EAC_R = 41
-        EAC_R_SIGNED = auto()
-        EAC_RG = auto()
-        EAC_RG_SIGNED = auto()
-        ETC2_RGB = auto()
-        ETC2_RGBA1 = auto()
-        ETC2_RGBA8 = auto()
-        ASTC_RGB_4x4 = auto()
-        ASTC_RGB_5x5 = auto()
-        ASTC_RGB_6x6 = auto()
-        ASTC_RGB_8x8 = auto()
-        ASTC_RGB_10x10 = auto()
-        ASTC_RGB_12x12 = auto()
-        ASTC_RGBA_4x4 = auto()
-        ASTC_RGBA_5x5 = auto()
-        ASTC_RGBA_6x6 = auto()
-        ASTC_RGBA_8x8 = auto()
-        ASTC_RGBA_10x10 = auto()
-        ASTC_RGBA_12x12 = auto()
-        ETC_RGB4_3DS = auto()
-        ETC_RGBA8_3DS = auto()
-        RG16 = auto()
-        R8 = auto()
-        ETC_RGB4Crunched = auto()
-        ETC2_RGBA8Crunched = auto()
-        ASTC_HDR_4x4 = auto()
-        ASTC_HDR_5x5 = auto()
-        ASTC_HDR_6x6 = auto()
-        ASTC_HDR_8x8 = auto()
-        ASTC_HDR_10x10 = auto()
-        ASTC_HDR_12x12 = auto()
-        RG32 = auto()
-        RGB48 = auto()
-        RGBA64 = auto()
-
-    class StreamingInfo:
-        offset: int
-        size: int
-        path: str
-
-        def __init__(self, reader: ObjectReader):
-            version = reader.version
-            if version >= [2020]:
-                self.offset = reader.i64
-            else:
-                self.offset = reader.u32
-            self.size = reader.u32
-            self.path = reader.aligned_string()
-
-    class GLTextureSettings:
-        filter_mode: int
-        aniso: int
-        mip_bias: float
-        wrap_mode: int
-
-        def __init__(self, reader: ObjectReader):
-            version = reader.version
-            self.filter_mode = reader.i32
-            self.aniso = reader.i32
-            self.mip_bias = reader.f32
-            if version >= [2017]:
-                self.wrap_mode = reader.i32
-                _wrap_v = reader.i32
-                _wrap_w = reader.i32
-            else:
-                self.wrap_mode = reader.i32
-
-    width: int
-    height: int
-    texture_format: TextureFormat
-    mipmap: bool
-    mip_count: int
-    texture_settings: GLTextureSettings
-    image_data: bytes
-    stream_data: StreamingInfo | None
-
-    def __init__(self, reader: ObjectReader):
-        super().__init__(reader)
-        version = reader.version
-        self.width = reader.i32
-        self.height = reader.i32
-        _complete_image_size = reader.i32
-        if version >= [2020]:
-            _mips_stripped = reader.i32
-
-        self.texture_format = self.TextureFormat(reader.i32)
-
-        if version <= [5, 2]:
-            self.mipmap = reader.boolean
-        else:
-            self.mip_count = reader.i32
-
-        if version >= [2, 6]:
-            _is_readable = reader.boolean
-
-        if version >= [2020]:
-            _is_pre_processed = reader.boolean
-
-        if version >= [2019, 3]:
-            _ignore_master_texture_limit = reader.boolean
-
-        if [3] <= version <= [5, 4]:
-            _read_allowed = reader.boolean
-
-        if version >= [2018, 2]:
-            _streaming_mipmaps = reader.boolean
-        reader.align(4)
-        if version >= [2018, 2]:
-            _streaming_mipmaps_priority = reader.i32
-
-        _image_count = reader.i32
-        _texture_dimension = reader.i32
-
-        self.texture_settings = self.GLTextureSettings(reader)
-
-        if version >= [3]:
-            _lightmap_format = reader.i32
-
-        if version >= [3, 5]:
-            _colorspace = reader.i32
-
-        if version >= [2020, 2]:
-            _platform_blob = reader.read(reader.i32)
-            reader.align(4)
-
-        image_data_size = reader.i32
-        self.stream_data = None
-        if image_data_size == 0 and version >= [5, 3]:
-            self.stream_data = self.StreamingInfo(reader)
-
-        if self.stream_data and self.stream_data.path:
-            self.image_data = ResourceReader.search(
-                self.stream_data.path, self.asset_file, self.stream_data.offset, self.stream_data.size
-            ).get()
-        else:
-            self.image_data = reader.read(image_data_size)
-
-    def get_image(self) -> Image.Image | None:
-        match self.texture_format:
-            case self.TextureFormat.RGB24:
-                return Image.frombytes('RGB', (self.width, self.height), self.image_data).transpose(1)
-            case self.TextureFormat.RGBA32:
-                return Image.frombytes('RGBA', (self.width, self.height), self.image_data).transpose(1)
-
-
-class Font(NamedObject):
-    font_data: bytes
-
-    def __init__(self, reader: ObjectReader):
-        super().__init__(reader)
-
-        if self.version >= [5, 5]:
-            _line_spacing = reader.f32
-            _default_material = PPtr[Object](reader)
-            _font_size = reader.f32
-            _texture = PPtr[Texture](reader)
-            _ascii_start_offset = reader.i32
-            _tracking = reader.f32
-            _character_spacing = reader.i32
-            _character_padding = reader.i32
-            _convert_case = reader.i32
-            _character_rects_size = reader.i32
-
-            reader.skip(44 * _character_rects_size)
-            _kerning_values_size = reader.i32
-            reader.skip(8 * _kerning_values_size)
-            _pixel_scale = reader.f32
-            _font_data_size = reader.i32
-
-            if _font_data_size > 0:
-                self.font_data = reader.read(_font_data_size)
-        else:
-            _ascii_start_offset = reader.i32
-
-            if self.version <= [3]:
-                _font_count_x = reader.i32
-                _font_count_y = reader.i32
-
-            _kerning = reader.f32
-            _line_spacing = reader.f32
-
-            if self.version <= [3]:
-                for _ in range(reader.i32):
-                    _first = reader.i32
-                    _second = reader.f32
-            else:
-                _character_spacing = reader.i32
-                _character_padding = reader.i32
-
-            _convert_case = reader.i32
-            _default_material = PPtr[Object](reader)
-
-            for _ in range(reader.i32):
-                _index = reader.i32
-
-                _uvx = reader.f32
-                _uvy = reader.f32
-                _uvwidth = reader.f32
-                _uvheight = reader.f32
-
-                _vertx = reader.f32
-                _verty = reader.f32
-                _vertwidth = reader.f32
-                _vertheight = reader.f32
-                _width = reader.f32
-
-                if self.version >= [4]:
-                    _flipped = reader.boolean
-                    reader.align(4)
-
-            _texture = PPtr[Texture](reader)
-
-            for _ in range(reader.i32):
-                _pair_first = reader.u16
-                _pair_second = reader.u16
-                _second = reader.f32
-
-            if self.version <= [3]:
-                _grid_font = reader.boolean
-                reader.align(4)
-            else:
-                _pixel_scale = reader.f32
-
-            _font_data_size = reader.i32
-            if _font_data_size > 0:
-                self.font_data = reader.read(_font_data_size)
-
-
-class Vector2:
-    x: float
-    y: float
-
-    def __init__(self, x: float, y: float):
-        self.x = x
-        self.y = y
-
-    @classmethod
-    def read(cls, reader: BinaryReader) -> 'Vector2':
-        return cls(reader.f32, reader.f32)
-
-
-class Vector4:
-    x: float
-    y: float
-    z: float
-    w: float
-
-    def __init__(self, x: float, y: float, z: float, w: float):
-        self.x = x
-        self.y = y
-        self.z = z
-        self.w = w
-
-    @classmethod
-    def read(cls, reader: BinaryReader) -> 'Vector4':
-        return cls(reader.f32, reader.f32, reader.f32, reader.f32)
 
 
 class StreamFile:
@@ -1032,6 +655,44 @@ class FileReader(BinaryReader):
 
         return True
 
+def lz4_decompress(data: bytes) -> bytearray:
+    result = bytearray()
+    reader = BinaryReader(data, big_endian=False)
+    data_size = len(data)
+    while True:
+        token = reader.u8
+
+        # read literal
+        literal_length = token >> 4
+        if literal_length == 15:
+            while (add := reader.u8) == 255:
+                literal_length += 255
+            else:
+                literal_length += add
+        result.extend(reader.read(literal_length))
+
+        if reader.pos == data_size:
+            break
+
+        # read match copy operation
+        offset = reader.u16
+        if offset == 0:
+            continue
+        match_length = token & 0b1111
+        if match_length == 15:
+            while (add := reader.u8) == 255:
+                match_length += 255
+            else:
+                match_length += add
+        match_length += 4
+
+        # supporting overlap copy
+        begin = len(result) - offset
+        for i in range(match_length):
+            result.append(result[begin + i])
+
+    return result
+
 
 class BundleFile:
     class Header:
@@ -1098,9 +759,9 @@ class BundleFile:
 
             match self.header.flags & 0x3F:
                 case 1:  # LZMA
-                    raise RuntimeError('sorry, dont support LZMA compress')
+                    raise RuntimeError('LZMA unsupported')
                 case 2 | 3:  # LZ4 | LZ4HC
-                    uncompressed_data = lz4.block.decompress(block_info_bytes, uncompressed_size=uncompressed_size)
+                    uncompressed_data = lz4_decompress(block_info_bytes)
                     if len(uncompressed_data) != uncompressed_size:
                         raise RuntimeError('lz4 decompression error: size not correct')
                 case _:
@@ -1133,8 +794,8 @@ class BundleFile:
                         raise RuntimeError('LZMA unsupported')
                     case 2 | 3:  # LZ4 | LZ4HC
                         block_stream.extend(
-                            lz4.block.decompress(
-                                reader.read(block.compressed_size), uncompressed_size=block.uncompressed_size
+                            lz4_decompress(
+                                reader.read(block.compressed_size)
                             )
                         )
                     case _:  # raw
@@ -1199,20 +860,8 @@ class AssetsManager:
         for asset_file in files:
             for object_info in asset_file.object_infos:
                 with ObjectReader(asset_file.reader, asset_file, object_info) as obj_reader:
-                    obj = None
-                    match obj_reader.class_id:
-                        case ClassID.ASSET_BUNDLE:
-                            obj = AssetBundle(obj_reader)
-                        case ClassID.TEXT_ASSET:
-                            obj = TextAsset(obj_reader)
-                        case ClassID.TEXTURE_2D:
-                            obj = Texture2D(obj_reader)
-                        case ClassID.FONT:
-                            obj = Font(obj_reader)
-                        case _:
-                            obj = Object(obj_reader)
-                    if obj:
-                        asset_file.add_object(obj)
+                    if obj_reader.class_id == ClassID.TEXT_ASSET:
+                        asset_file.add_object(TextAsset(obj_reader))
 
 
 if __name__ == '__main__':
