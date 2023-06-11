@@ -233,8 +233,10 @@ class App(ttk.Frame):
                 if 'ans' not in file
             ]
             self.difficulties_select['values'] = difficulties
-        except configparser.NoOptionError:
+        except (configparser.NoOptionError, FileNotFoundError) :
             cache.set('cache', 'songid', '')
+            self.song_id.set('')
+            self.difficulties_select['values'] = []
 
         try:
             self.difficulty.set(difficulty := cache.get('cache', 'difficulty'))
