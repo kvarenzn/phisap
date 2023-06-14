@@ -1,4 +1,6 @@
 # phisap - PHIgros Semi-Auto Player
+当前最高支持 ![最高支持](https://img.shields.io/badge/Phigros-3.1.0-blue.svg)
+
 适用于音游Phigros的半自动打歌器，**仅支持安卓设备**
 
 PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控事件），且愿意帮助本项目的话，请开issue告诉我如何做，我会在之后加上对iOS设备的支持
