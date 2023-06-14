@@ -16,10 +16,10 @@ class DeviceController:
     control_socket: socket.socket
     server_process: subprocess.Popen
     streaming_collector: threading.Thread
+    control_collector: threading.Thread
     device_width: int
     device_height: int
     collector_running: bool
-    pointers_record: dict[int, bool]
 
     def __init__(self, serial: str | None = None, port: int = 27188, push_server: bool = True, server_dir: str = '.') -> None:
         self.serial = serial
@@ -100,8 +100,6 @@ class DeviceController:
 
         self.control_collector = threading.Thread(target=ctrlmsg_receiver, daemon=True)
         self.control_collector.start()
-
-        self.pointers_record = {}
 
     def touch(self, x: int, y: int, action: TouchAction, pointer_id: int) -> None:
         self.control_socket.send(
