@@ -6,6 +6,8 @@ import time
 import random
 import os
 
+import av
+
 from algo.algo_base import TouchAction
 
 
@@ -59,16 +61,22 @@ class DeviceController:
 
         self.collector_running = True
 
-        def collector():
-            '''垃圾收集器
-            实际上我们并不需要scrcpy-server传来的视频数据，
-            但如果我们不接收这些数据，server就会崩溃，所以这个线程专门用来接受这些数据，
-            然后把它们丢到虚空'''
+        def streaming_decoder():
+            '''解码手机端传回的视频数据，得到视频的尺寸'''
+            codec = av.CodecContext.create('h264', 'r')
             try:
                 while self.collector_running:
                     _pts = self.video_socket.recv(8)  # unused
                     size = int.from_bytes(self.video_socket.recv(4), 'big')
-                    self.video_socket.recv(size)
+                    packets = codec.parse(self.video_socket.recv(size))
+                    for packet in packets:
+                        frames = codec.decode(packet)
+                        for frame in frames:
+                            if self.device_width != frame.width or self.device_height != frame.height:
+                                print('[client]', f'device_size: {self.device_width}x{self.device_height} -> {frame.width}x{frame.height}')
+                                self.device_width = frame.width
+                                self.device_height = frame.height
+                            break
             except Exception as e:
                 print(e.with_traceback(None))
                 self.collector_running = False
@@ -89,13 +97,13 @@ class DeviceController:
         _device_name = self.video_socket.recv(64)  # sendDeviceMeta
 
         # streamer.writeVideoHeader(device.getScreenInfo().getVideoSize())
-        _codec_id = self.video_socket.recv(4).decode()
+        codec_id = self.video_socket.recv(4).decode()
         self.device_width = int.from_bytes(self.video_socket.recv(4), 'big')
         self.device_height = int.from_bytes(self.video_socket.recv(4), 'big')
 
-        print('[client]', f'device_size = {self.device_width}x{self.device_height}, codec_id = {_codec_id}')
+        print('[client]', f'device_size = {self.device_width}x{self.device_height}, codec_id = {codec_id}')
 
-        self.streaming_collector = threading.Thread(target=collector, daemon=True)
+        self.streaming_collector = threading.Thread(target=streaming_decoder, daemon=True)
         self.streaming_collector.start()
 
         self.control_collector = threading.Thread(target=ctrlmsg_receiver, daemon=True)

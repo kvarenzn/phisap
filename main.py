@@ -312,6 +312,12 @@ class App(ttk.Frame):
             if self.controller is None:
                 self.controller = DeviceController()
 
+                # 在初次连接设备时等待三秒钟，确保获取到正确的视频尺寸
+                # 或许可以用一个线程锁？不过暂时没必要搞得这么复杂
+                print('[client]', '正在确认设备尺寸，请稍候')
+                time.sleep(3)
+                print('[client]', f'设备尺寸: {self.controller.device_width}x{self.controller.device_height}')
+
             device_width = self.controller.device_width
             device_height = self.controller.device_height
 
@@ -384,7 +390,7 @@ class App(ttk.Frame):
                 except Exception:
                     pass
                 finally:
-                    self.console.print('打歌完毕')
+                    self.console.print('操作结束')
 
                 self.go['command'] = pre_command
                 self.go['text'] = pre_text
@@ -418,7 +424,7 @@ class App(ttk.Frame):
                         except StopIteration:
                             pass
                         finally:
-                            self.console.print('打歌完毕')
+                            self.console.print('操作结束')
                     else:
                         self.console.print('self.controller == None')
 
