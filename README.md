@@ -47,6 +47,7 @@ PS: 如果你知道如何实现iOS设备的无越狱远程控制（发送触控�
 
 ### 运行
 ```bash
+cd phisap # 将CWD(Current Working Directory，当前工作目录)设置为phisap的根目录，以便phisap查找服务端文件
 python main.py
 ```
 
