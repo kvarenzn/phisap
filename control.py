@@ -77,6 +77,7 @@ class DeviceController:
                                 self.device_width = frame.width
                                 self.device_height = frame.height
                             break
+                        break
             except Exception as e:
                 print(e.with_traceback(None))
                 self.collector_running = False
