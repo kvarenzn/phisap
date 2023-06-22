@@ -50,6 +50,8 @@ PHIgros Semi-Automatic Player
 
 ### 准备
 0. **请安装Python 3.11**
+    + 请使用正式版，不要使用开发者预览(early developer preview)版
+        + 如果你非要用，请使用`3.11.0a5`及以后的版本，否则你可能会遇到一些问题，见issue#71
 1. 使用`pip install -r requirements.txt`安装依赖
 2. 请安装`Android Debug Bridge`，**要求版本号至少为`1.0.41`**，并确保相应的环境变量已经配置好。
 3. 请准备Phigros的游戏安装包。目前支持的游戏版本为2.0.0至3.1.0
