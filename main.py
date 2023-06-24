@@ -18,7 +18,7 @@ from rich.progress import track
 
 
 def extract_apk(console: Console):
-    apk_path = filedialog.askopenfilename(filetypes=[('安装包', '.apk')], title='请选择要解包的游戏安装包')
+    apk_path = filedialog.askopenfilename(filetypes=[('安装包', '.apk'), ('通用数据包', '.obb')], title='请选择要解包的游戏安装包或通用数据包')
     if not apk_path:
         return
     popup = Toplevel()
@@ -28,19 +28,33 @@ def extract_apk(console: Console):
     popup.pack_slaves()
     popup.update()
 
-    console.print('正在读取安装包...')
+    console.print('正在读取...')
     apk_file = zipfile.ZipFile(apk_path)
     console.print('正在解析catalog.json...')
-    catalog = Catalog(apk_file.open('assets/aa/catalog.json'))
+    catalog = None
+
+    try:
+        catalog = Catalog(apk_file.open('assets/aa/catalog.json'))
+    except KeyError:
+        messagebox.showerror('解包失败',
+                             '未在包内找到catalog.json\n'
+                             '这可能是由于安装包损坏，或者你的安装包是Google Play版本的\n'
+                             '如果是后者，请提取对应的obb文件，并解包该文件\n'
+                             '详见phisap的README说明')
+
+    if not catalog:
+        return
+
     manager = AssetsManager()
     for file in track(apk_file.namelist(), description='正在加载文件...', console=console):
         if not file.startswith('assets/aa/Android'):
             continue
         with apk_file.open(file) as f:
             manager.load_file(f)
-    popup.title('已加载安装包')
+    popup.title('已加载')
     popup.update()
     manager.read_assets(console)
+
 
     popup.title('正在解包，请稍候...')
     popup.update()
@@ -96,7 +110,7 @@ class App(ttk.Frame):
 
         frm = ttk.Frame()
         frm.pack()
-        self.extract_btn = ttk.Button(frm, text='解包Apk', command=lambda: extract_apk(self.console))
+        self.extract_btn = ttk.Button(frm, text='提取谱面', command=lambda: extract_apk(self.console))
         self.extract_btn.pack()
 
         ttk.Separator(orient='horizontal').pack(fill=X)
@@ -207,8 +221,9 @@ class App(ttk.Frame):
             messagebox.showinfo(
                 '谱面库为空',
                 'phisap需要依赖游戏的谱面文件才能工作，然而您当前的谱面库为空\n'
-                'phisap支持从游戏安装包中解包并读取谱面文件，接下来请您选择游戏的安装包\n'
-                '另外，每当游戏更新后，您都需要重新点击"解包Apk"按钮来更新谱面库',
+                'phisap支持从游戏安装包中解包并读取谱面文件\n'
+                '接下来请您选择游戏的安装包(.apk)或通用数据包(.obb)\n'
+                '此外，每当游戏更新后，您都需要重新点击"提取谱面"按钮来更新谱面库',
             )
             extract_apk(self.console)
             self.load_songs()
