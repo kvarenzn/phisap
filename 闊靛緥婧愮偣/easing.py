@@ -5,24 +5,27 @@ from math import pi, sin, cos
 import numpy as np
 
 
-def _easing_linear(start: tuple[float, float, float], end: tuple[float, float, float], t: float) -> tuple[
-        float, float, float]:
+def _easing_linear(
+    start: tuple[float, float, float], end: tuple[float, float, float], t: float
+) -> tuple[float, float, float]:
     return tuple(np.array(np.mat((1 - t, t)) @ np.mat((start, end)))[0])
 
 
-def _easing_cubic_bezier(start: tuple[float, float, float], end: tuple[float, float, float], t: float) -> tuple[
-        float, float, float]:
+def _easing_cubic_bezier(
+    start: tuple[float, float, float], end: tuple[float, float, float], t: float
+) -> tuple[float, float, float]:
     mult = np.eye(3) * (1 - t) * (1 + 2 * t)
-    mult[1, 1] = 1.
-    start = np.array(start) @ mult
+    mult[1, 1] = 1.0
+    start = (np.array(start) @ mult).tolist()
     mult = np.eye(3) * t * (3 - 2 * t)
     mult[1, 1] = 1
-    end = np.array(end) @ mult
+    end = (np.array(end) @ mult).tolist()
     return _easing_linear(start, end, t)
 
 
-def _easing_sinus(start: tuple[float, float, float], end: tuple[float, float, float], t: float, x: str,
-                  z: str = None) -> tuple[float, float, float]:
+def _easing_sinus(
+    start: tuple[float, float, float], end: tuple[float, float, float], t: float, x: str, z: str | None = None
+) -> tuple[float, float, float]:
     x0, y0, z0 = start
     x1, y1, z1 = end
     if x == 'si':

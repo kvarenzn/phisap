@@ -25,8 +25,19 @@ class Arc:
     trace_arc: bool
     taps: list[ArcTap]
 
-    def __init__(self, start: int, end: int, start_x: float, end_x: float, easing: Easing, start_y: float, end_y: float,
-                 color: int, _, trace_arc: bool):
+    def __init__(
+        self,
+        start: int,
+        end: int,
+        start_x: float,
+        end_x: float,
+        easing: Easing,
+        start_y: float,
+        end_y: float,
+        color: int,
+        _,
+        trace_arc: bool,
+    ):
         self.start = start
         self.end = end
         self.start_x = start_x
@@ -91,9 +102,9 @@ class Timing:
 
 class Chart:
     notes: list[Union[Timing, Tap, Hold, Arc]]
-    options: dict[str, Any]
+    options: dict[str, Any] | None
 
-    def __init__(self, notes: list[Union[Timing, Tap, Hold, Arc]], options: dict[str, Any] = None):
+    def __init__(self, notes: list[Union[Timing, Tap, Hold, Arc]], options: dict[str, Any] | None = None):
         self.notes = notes
         self.options = options
 
@@ -103,10 +114,24 @@ class Chart:
         options = {}
         notes = []
         line_iter = iter(lines)
-        lcls = {'true': True, 'false': False, 'none': None, 'arc': Arc, 'tap': Tap, 'arctap': ArcTap, 'hold': Hold,
-                'timing': Timing, 's': Easing.Linear, 'b': Easing.CubicBezier, 'so': Easing.So,
-                'si': Easing.Si, 'soso': Easing.SoSo, 'sisi': Easing.SiSi, 'sosi': Easing.SoSi,
-                'siso': Easing.SiSo}
+        lcls = {
+            'true': True,
+            'false': False,
+            'none': None,
+            'arc': Arc,
+            'tap': Tap,
+            'arctap': ArcTap,
+            'hold': Hold,
+            'timing': Timing,
+            's': Easing.Linear,
+            'b': Easing.CubicBezier,
+            'so': Easing.So,
+            'si': Easing.Si,
+            'soso': Easing.SoSo,
+            'sisi': Easing.SiSi,
+            'sosi': Easing.SoSi,
+            'siso': Easing.SiSo,
+        }
         for line in line_iter:
             if ':' in line:
                 key, value = line.split(':')
