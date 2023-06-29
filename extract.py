@@ -797,7 +797,7 @@ class BundleFile:
                     case 1:  # LZMA
                         raise RuntimeError('LZMA unsupported')
                     case 2 | 3:  # LZ4 | LZ4HC
-                        block_stream.extend(lz4_decompress(reader.read(block.compressed_size), uncompressed_size=uncompressed_size))
+                        block_stream.extend(lz4_decompress(reader.read(block.compressed_size), uncompressed_size=block.uncompressed_size))
                     case _:  # raw
                         block_stream.extend(reader.read(block.compressed_size))
 
