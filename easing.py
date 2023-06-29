@@ -43,7 +43,7 @@ def _easing_sinus(
     return x0 + (x1 - x0) * sx, y0 + (y1 - y0) * t, z0 + (z1 - z0) * sz
 
 
-class Easing(Enum):
+class Easing3D(Enum):
     Linear = partial(_easing_linear)
     CubicBezier = partial(_easing_cubic_bezier)
     Si = partial(_easing_sinus, x='si')
@@ -57,6 +57,6 @@ class Easing(Enum):
 if __name__ == '__main__':
     print(_easing_linear((0, 1, 0), (1, 1, 0), 0.2))
     print(_easing_cubic_bezier((0, 0, 0), (1, 1, 0), 0.2))
-    print(Easing.So.value((0, 1, 0), (1, 1, 0), 0.2))
-    print(Easing.CubicBezier)
-    print(Easing.SiSi)
+    print(Easing3D.So.value((0, 1, 0), (1, 1, 0), 0.2))
+    print(Easing3D.CubicBezier)
+    print(Easing3D.SiSi)

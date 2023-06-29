@@ -1,6 +1,6 @@
 from typing import Any, Union
 
-from easing import Easing
+from ..easing import Easing3D
 
 
 class ArcTap:
@@ -18,7 +18,7 @@ class Arc:
     end: int
     start_x: float
     end_x: float
-    easing: Easing
+    easing: Easing3D
     start_y: float
     end_y: float
     color: int
@@ -31,7 +31,7 @@ class Arc:
         end: int,
         start_x: float,
         end_x: float,
-        easing: Easing,
+        easing: Easing3D,
         start_y: float,
         end_y: float,
         color: int,
@@ -123,14 +123,14 @@ class Chart:
             'arctap': ArcTap,
             'hold': Hold,
             'timing': Timing,
-            's': Easing.Linear,
-            'b': Easing.CubicBezier,
-            'so': Easing.So,
-            'si': Easing.Si,
-            'soso': Easing.SoSo,
-            'sisi': Easing.SiSi,
-            'sosi': Easing.SoSi,
-            'siso': Easing.SiSo,
+            's': Easing3D.Linear,
+            'b': Easing3D.CubicBezier,
+            'so': Easing3D.So,
+            'si': Easing3D.Si,
+            'soso': Easing3D.SoSo,
+            'sisi': Easing3D.SiSi,
+            'sosi': Easing3D.SoSi,
+            'siso': Easing3D.SiSo,
         }
         for line in line_iter:
             if ':' in line:
