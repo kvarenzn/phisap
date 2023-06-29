@@ -655,43 +655,47 @@ class FileReader(BinaryReader):
 
         return True
 
-def lz4_decompress(data: bytes) -> bytearray:
-    result = bytearray()
-    reader = BinaryReader(data, big_endian=False)
-    data_size = len(data)
-    while True:
-        token = reader.u8
 
-        # read literal
-        literal_length = token >> 4
-        if literal_length == 15:
-            while (add := reader.u8) == 255:
-                literal_length += 255
-            else:
-                literal_length += add
-        result.extend(reader.read(literal_length))
+try:
+    from lz4.block import decompress as lz4_decompress
+except ImportError:
+    print('导入lz4.block库失败，将启用备用解压函数，解包速度将会显著降低')
+    def lz4_decompress(data: bytes, **_) -> bytes:
+        result = bytearray()
+        reader = BinaryReader(data, big_endian=False)
+        data_size = len(data)
+        while True:
+            token = reader.u8
 
-        if reader.pos == data_size:
-            break
+            # read literal
+            literal_length = token >> 4
+            if literal_length == 15:
+                while (add := reader.u8) == 255:
+                    literal_length += 255
+                else:
+                    literal_length += add
+            result.extend(reader.read(literal_length))
 
-        # read match copy operation
-        offset = reader.u16
-        if offset == 0:
-            continue
-        match_length = token & 0b1111
-        if match_length == 15:
-            while (add := reader.u8) == 255:
-                match_length += 255
-            else:
-                match_length += add
-        match_length += 4
+            if reader.pos == data_size:
+                break
 
-        # supporting overlap copy
-        begin = len(result) - offset
-        for i in range(match_length):
-            result.append(result[begin + i])
+            # read match copy operation
+            offset = reader.u16
+            if offset == 0:
+                continue
+            match_length = token & 0b1111
+            if match_length == 15:
+                while (add := reader.u8) == 255:
+                    match_length += 255
+                else:
+                    match_length += add
+            match_length += 4
 
-    return result
+            # supporting overlap copy
+            begin = len(result) - offset
+            for i in range(match_length):
+                result.append(result[begin + i])
+        return bytes(result)
 
 
 class BundleFile:
@@ -761,7 +765,7 @@ class BundleFile:
                 case 1:  # LZMA
                     raise RuntimeError('LZMA unsupported')
                 case 2 | 3:  # LZ4 | LZ4HC
-                    uncompressed_data = lz4_decompress(block_info_bytes)
+                    uncompressed_data = lz4_decompress(block_info_bytes, uncompressed_size=uncompressed_size)
                     if len(uncompressed_data) != uncompressed_size:
                         raise RuntimeError('lz4 decompression error: size not correct')
                 case _:
@@ -793,11 +797,7 @@ class BundleFile:
                     case 1:  # LZMA
                         raise RuntimeError('LZMA unsupported')
                     case 2 | 3:  # LZ4 | LZ4HC
-                        block_stream.extend(
-                            lz4_decompress(
-                                reader.read(block.compressed_size)
-                            )
-                        )
+                        block_stream.extend(lz4_decompress(reader.read(block.compressed_size), uncompressed_size=uncompressed_size))
                     case _:  # raw
                         block_stream.extend(reader.read(block.compressed_size))
 
