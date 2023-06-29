@@ -145,7 +145,7 @@ class PointerAllocator:
         x, y = recalc_pos(note.pos, sa, ca)
         for delta in range(FLICK_DURATION):
             rate = 1 - 2 * delta / FLICK_DURATION
-            px, py = (x - rate * FLICK_RADIUS * sa, y + rate * FLICK_RADIUS * ca)
+            px, py = (x - rate * FLICK_RADIUS * ca, y + rate * FLICK_RADIUS * sa)
             self._insert(self.now + delta, VirtualTouchEvent((px, py), TouchAction.MOVE, pointer.id))
         pointer.note = note._replace(pos=(px, py))
         pointer.age = FLICK_START - FLICK_END
