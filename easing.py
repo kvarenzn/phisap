@@ -1,3 +1,5 @@
+from typing import Callable
+from types import CodeType, FunctionType
 from enum import Enum
 from functools import partial
 from math import pi, sin, cos
@@ -43,6 +45,57 @@ def _easing_sinus(
     return x0 + (x1 - x0) * sx, y0 + (y1 - y0) * t, z0 + (z1 - z0) * sz
 
 
+EasingFunction = Callable[[float], float]
+
+
+def _in(expr: str) -> str:
+    return '1 - ' + expr.replace('x', '(1 - x)')
+
+
+def _out(expr: str) -> str:
+    return expr
+
+
+def _inout(expr: str) -> str:
+    return (
+        f'({_in(expr).replace("x", "(2 * x)")}) / 2 if x < 0.5 else ({_out(expr).replace("x", "(2 * x - 1)")}) / 2 + 1'
+    )
+
+
+def _outin(expr: str) -> str:
+    return (
+        f'({_out(expr).replace("x", "(2 * x)")}) / 2 if x < 0.5 else ({_in(expr).replace("x", "(2 * x - 1)")}) / 2 + 1'
+    )
+
+class Easing:
+    EASING_BASIC_FUNCTIONS = {
+        'linear': 'x',
+        'sine': 'sin(x * pi / 2)',
+        'quad': 'x ** 2',
+        'cubic': 'x ** 3',
+        'quant': 'x ** 4',
+        'quint': 'x ** 5'
+    }
+
+    EASING_SUFFIXES = [_in, _out, _inout, _outin]
+
+    @staticmethod
+    def easing(easing_basic: tuple[str, str], suffix: Callable[[str], str]) -> Callable[[float], float]:
+        name, expr = easing_basic
+        name += suffix.__name__
+        f = compile('lambda x:' + suffix(expr), '<string>', 'eval')
+        code = [c for c in f.co_consts if isinstance(c, CodeType)][0]
+        return FunctionType(code, globals())
+
+    local = locals()
+    for b in EASING_BASIC_FUNCTIONS:
+        for s in EASING_SUFFIXES:
+            local[b + s.__name__] = easing((b, EASING_BASIC_FUNCTIONS[b]), s)
+
+    del local['b']
+    del local['s']
+    del local['local']
+
 class Easing3D(Enum):
     Linear = partial(_easing_linear)
     CubicBezier = partial(_easing_cubic_bezier)
@@ -55,8 +108,5 @@ class Easing3D(Enum):
 
 
 if __name__ == '__main__':
-    print(_easing_linear((0, 1, 0), (1, 1, 0), 0.2))
-    print(_easing_cubic_bezier((0, 0, 0), (1, 1, 0), 0.2))
-    print(Easing3D.So.value((0, 1, 0), (1, 1, 0), 0.2))
-    print(Easing3D.CubicBezier)
-    print(Easing3D.SiSi)
+    print(dir(Easing))
+    print(Easing.quad_in(0.5))

@@ -152,7 +152,7 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
 
     def flick_pos(px: float, py: float, offset: int, sina: float, cosa: float) -> tuple[float, float]:
         rate = 1 - 2 * (offset - FLICK_START) / FLICK_DURATION
-        return (px - sina * FLICK_RADIUS * rate, py + cosa * FLICK_RADIUS * rate)
+        return (px - cosa * FLICK_RADIUS * rate, py + sina * FLICK_RADIUS * rate)
 
     console.print('开始规划')
 
