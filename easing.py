@@ -99,8 +99,8 @@ EASING_FUNCTIONS: dict[str, EasingFunction] = {
     for b, fn in _EASING_BASIC_FUNCTIONS.items()
 }
 
-LMOST: EasingFunction = lambda _: 0
-RMOST: EasingFunction = lambda _: 1
+LVALUE: EasingFunction = lambda _: 0
+RVALUE: EasingFunction = lambda _: 1
 
 class Easing3D(Enum):
     Linear = partial(_easing_linear)
