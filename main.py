@@ -8,13 +8,15 @@ from algo.algo_base import TouchEvent
 from threading import Thread
 
 from catalog import Catalog
-from chart import Chart
 from control import DeviceController
 from extract import AssetsManager, TextAsset
 from algo.algo_base import load_from_json, export_to_json
+from pgr import PgrChart
 
 from rich.console import Console
 from rich.progress import track
+
+PHISAP_VERSION = '0.3'
 
 
 def extract_apk(console: Console):
@@ -297,7 +299,7 @@ class App(ttk.Frame):
 
             chart_path = f'./Assets/Tracks/{self.song_id.get()}/Chart_{self.difficulty.get()}.json'
 
-            chart = Chart.from_dict(json.load(open(chart_path)))
+            chart = PgrChart(json.load(open(chart_path)))
 
             assert self.cache
             assert self.cache_path
@@ -340,7 +342,7 @@ class App(ttk.Frame):
             width = height * 16 // 9
             xoffset = (device_width - width) >> 1
             yoffset = (device_height - height) >> 1
-            scale_factor = height / 720
+            scale_factor = height / 9
 
             adapted_ans = [
                 (timestamp, [ev.map_to(xoffset, yoffset, scale_factor, scale_factor) for ev in ans[timestamp]])
@@ -489,5 +491,5 @@ class App(ttk.Frame):
 
 if __name__ == '__main__':
     tk = Tk()
-    tk.title('phisap')
+    tk.title(f'phisap v{PHISAP_VERSION}')
     App(tk).load_songs().load_cache('./cache').detect_adb_devices().mainloop()

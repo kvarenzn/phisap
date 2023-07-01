@@ -2,6 +2,7 @@
 build/
 .gradle/
 .idea/
+.vscode/
 server.jar
 cache
 scrcpy-server-*

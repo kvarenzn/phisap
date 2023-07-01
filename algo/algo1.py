@@ -1,22 +1,23 @@
 """保守的指针规划算法"""
 
 import math
+import cmath
 from typing import NamedTuple
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 
 from .algo_base import TouchAction, VirtualTouchEvent, distance_of, recalc_pos, in_screen
-from chart import Chart
-from note import NoteType
+from basis import Chart, NoteType, Position, Vector
 
 from rich.console import Console
 from rich.progress import track
 
+
 @dataclass
 class Pointer:
     pid: int
-    pos: tuple[float, float]
+    pos: Position
     timestamp: int
     occupied: int = 0
 
@@ -34,7 +35,7 @@ class FrameEventAction(Enum):
 
 class FrameEvent(NamedTuple):
     action: FrameEventAction
-    point: tuple[float, float]
+    point: Position
     id: int
 
 
@@ -81,7 +82,7 @@ class PointerManager:
             ptr.pos = event.point
             return ptr.pid, False
         if not new:
-            nearest_distance = 200
+            nearest_distance = 2.5
             nearest_pid = None
             for pid, ptr in self.unused.items():
                 if (d := distance_of(event.point, ptr.pos)) < nearest_distance:
@@ -138,42 +139,41 @@ class PointerManager:
 
 
 def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
-    FLICK_START = -30
+    flick_start = -30
     FLICK_END = 30
-    FLICK_DURATION = FLICK_END - FLICK_START
-    FLICK_RADIUS = 30
+    FLICK_DURATION = FLICK_END - flick_start
+    FLICK_RADIUS = 3 / 8
 
     frames: defaultdict[int, list[FrameEvent]] = defaultdict(list)
 
-    def add_frame_event(milliseconds: int, action: FrameEventAction, point: tuple[float, float], id: int):
+    def add_frame_event(milliseconds: int, action: FrameEventAction, point: Position, id: int):
         frames[milliseconds].append(FrameEvent(action, point, id))
 
     current_event_id = 0
 
-    def flick_pos(px: float, py: float, offset: int, sina: float, cosa: float) -> tuple[float, float]:
-        rate = 1 - 2 * (offset - FLICK_START) / FLICK_DURATION
-        return (px - cosa * FLICK_RADIUS * rate, py + sina * FLICK_RADIUS * rate)
+    def flick_pos(pos: Position, offset: int, rot_vec: Vector) -> Position:
+        rate = 1 - 2 * (offset - flick_start) / FLICK_DURATION
+        return pos - rot_vec.conjugate() * FLICK_RADIUS * rate
 
     console.print('开始规划')
 
     # 统计frames
     for line in track(chart.judge_lines, description='正在统计帧...', console=console):
-        for event in line.notes_above + line.notes_below:
-            ms = round(line.seconds(event.time) * 1000)
-            off_x = event.x * 80
-            x, y = line.pos(event.time)
-            alpha = -line.angle(event.time) * math.pi / 180
-            sa = math.sin(alpha)
-            ca = math.cos(alpha)
-            px, py = x + off_x * ca, y + off_x * sa
+        for note in line.notes:
+            ms = round(note.seconds * 1000)
+            line_pos = line.position[note.seconds]
+            off_x = note.x
+            alpha = line.angle[note.seconds]
+            rot_vec: Vector = cmath.exp(alpha * 1j)
+            note_pos = line_pos + rot_vec * off_x
 
-            match event.type:
+            match note.type:
                 case NoteType.TAP:
-                    add_frame_event(ms, FrameEventAction.TAP, recalc_pos((px, py), sa, ca), current_event_id)
+                    add_frame_event(ms, FrameEventAction.TAP, recalc_pos(note_pos, rot_vec), current_event_id)
                 case NoteType.DRAG:
-                    add_frame_event(ms, FrameEventAction.DRAG, recalc_pos((px, py), sa, ca), current_event_id)
+                    add_frame_event(ms, FrameEventAction.DRAG, recalc_pos(note_pos, rot_vec), current_event_id)
                 case NoteType.FLICK:
-                    if not in_screen((px, py)):
+                    if not in_screen(note_pos):
                         # 给DESTRUCTION 3,2,1打个补丁
                         # 这首歌的IN难度的最后一个flick是在屏幕外判定的，你敢信？
                         # 这个flick的触发时刻为26752，然而它所在的判定线在26752时刻时的位置在(w/2, -h/2)
@@ -191,59 +191,62 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
                         # 也就是在屏幕的中心
                         found = False
                         for dt in range(-3, 4):  # 查找的范围为[event.time - 3, event.time + 3]
-                            new_time = event.time + dt
-                            xx, yy = line.pos(new_time)
-                            new_alpha = -line.angle(new_time) * math.pi / 180
-                            new_sa = math.sin(new_alpha)
-                            new_ca = math.cos(new_alpha)
-                            pxx, pyy = xx + off_x * new_ca, yy + off_x * new_sa
-                            if in_screen((pxx, pyy)):
+                            new_time = note.seconds + dt * line.beat_duration()
+                            new_line_pos = line.position[new_time]
+                            new_alpha = line.angle[new_time]
+                            new_rot_vec = cmath.exp(new_alpha * 1j)
+                            new_note_pos = new_line_pos + new_rot_vec * off_x
+                            if in_screen(new_note_pos):
                                 found = True
-                                console.print(f'[red]微调判定时间：flick(pos=({px, py}), time={event.time}) => flick(pos=({pxx}, {pyy}), time={new_time})[/red]')
-                                x, y = xx, yy
-                                alpha = new_alpha
-                                sa, ca = new_sa, new_ca
-                                px, py = pxx, pyy
+                                console.print(
+                                    f'[red]微调判定时间：flick(pos=({(note_pos.real, note_pos.imag)}), time={note.seconds}) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time})[/red]'
+                                )
+                                rot_vec = new_rot_vec
+                                note_pos = new_note_pos
                                 break
 
                         if not found:
                             # 对于另外一些情况，我们没有找到这个时间戳
                             # 这是我们假设此处使用了垂直判定机制，使用recalc_pos找到一个屏幕内的可行判定点
-                            px, py = recalc_pos((px, py), sa, ca)
+                            note_pos = recalc_pos(note_pos, rot_vec)
 
                     add_frame_event(
-                        ms + FLICK_START,
+                        ms + flick_start,
                         FrameEventAction.FLICK_START,
-                        recalc_pos(flick_pos(px, py, FLICK_START, sa, ca), sa, ca),
+                        recalc_pos(flick_pos(note_pos, flick_start, rot_vec), rot_vec),
                         current_event_id,
                     )
-                    for offset in range(FLICK_START + 1, FLICK_END):
+                    for offset in range(flick_start + 1, FLICK_END):
                         add_frame_event(
                             ms + offset,
                             FrameEventAction.FLICK,
-                            recalc_pos(flick_pos(px, py, offset, sa, ca), sa, ca),
+                            recalc_pos(flick_pos(note_pos, offset, rot_vec), rot_vec),
                             current_event_id,
                         )
                     add_frame_event(
                         ms + FLICK_END,
                         FrameEventAction.FLICK_END,
-                        recalc_pos(flick_pos(px, py, FLICK_END, sa, ca), sa, ca),
+                        recalc_pos(flick_pos(note_pos, FLICK_END, rot_vec), rot_vec),
                         current_event_id,
                     )
                 case NoteType.HOLD:
-                    hold_ms = math.ceil(line.seconds(event.hold) * 1000)
-                    add_frame_event(ms, FrameEventAction.HOLD_START, recalc_pos((px, py), sa, ca), current_event_id)
+                    hold_ms = math.ceil(note.hold * 1000)
+                    add_frame_event(ms, FrameEventAction.HOLD_START, recalc_pos(note_pos, rot_vec), current_event_id)
                     for offset in range(1, hold_ms):
+                        new_time = (ms + offset) / 1000
+                        angle = line.angle[new_time]
                         add_frame_event(
                             ms + offset,
                             FrameEventAction.HOLD,
-                            recalc_pos(line.pos_of(event, line.time((ms + offset) / 1000)), sa, ca),
+                            recalc_pos(line.pos(new_time, note.x), cmath.exp(angle * 1j)),
                             current_event_id,
                         )
+                    new_time = (ms + hold_ms) / 1000
+                    angle = line.angle[new_time]
                     add_frame_event(
                         ms + hold_ms,
                         FrameEventAction.HOLD_END,
-                        recalc_pos(line.pos_of(event, line.time((ms + hold_ms) / 1000)), sa, ca),
+                        recalc_pos(line.pos(new_time, note.x), cmath.exp(angle * 1j)),
                         current_event_id,
                     )
             current_event_id += 1
@@ -254,41 +257,40 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
 
     result: defaultdict[int, list[VirtualTouchEvent]] = defaultdict(list)
 
-    def add_touch_event(milliseconds: int, pos: tuple[float, float], action: TouchAction, pointer_id: int):
+    def add_touch_event(milliseconds: int, pos: Position, action: TouchAction, pointer_id: int):
         result[milliseconds].append(VirtualTouchEvent(pos, action, pointer_id))
 
     for ms, frame in track(sorted(frames.items()), description='正在规划触控事件...', console=console):
         pointers.now = ms
         is_keyframe = False
-        for event in frame:
-            match event.action:
+        for note in frame:
+            match note.action:
                 case FrameEventAction.TAP:
-                    add_touch_event(ms, event.point, TouchAction.DOWN, pointers.acquire(event)[0])
-                    pointers.release(event)
+                    add_touch_event(ms, note.point, TouchAction.DOWN, pointers.acquire(note)[0])
+                    pointers.release(note)
                     is_keyframe = True
                 case FrameEventAction.DRAG:
-                    pid, new = pointers.acquire(event, new=False)
+                    pid, new = pointers.acquire(note, new=False)
                     act = TouchAction.DOWN if new else TouchAction.MOVE
-                    add_touch_event(ms, event.point, act, pid)
-                    pointers.release(event)
-                    # is_keyframe = True
+                    add_touch_event(ms, note.point, act, pid)
+                    pointers.release(note)
                 case FrameEventAction.FLICK_START:
-                    pid, new = pointers.acquire(event, new=False)
+                    pid, new = pointers.acquire(note, new=False)
                     act = TouchAction.DOWN if new else TouchAction.MOVE
-                    add_touch_event(ms, event.point, act, pid)
+                    add_touch_event(ms, note.point, act, pid)
                 case FrameEventAction.FLICK | FrameEventAction.HOLD:
-                    add_touch_event(ms, event.point, TouchAction.MOVE, pointers.acquire(event)[0])
+                    add_touch_event(ms, note.point, TouchAction.MOVE, pointers.acquire(note)[0])
                 case FrameEventAction.FLICK_END | FrameEventAction.HOLD_END:
-                    add_touch_event(ms, event.point, TouchAction.MOVE, pointers.acquire(event)[0])
-                    pointers.release(event)
+                    add_touch_event(ms, note.point, TouchAction.MOVE, pointers.acquire(note)[0])
+                    pointers.release(note)
                 case FrameEventAction.HOLD_START:
-                    add_touch_event(ms, event.point, TouchAction.DOWN, pointers.acquire(event)[0])
+                    add_touch_event(ms, note.point, TouchAction.DOWN, pointers.acquire(note)[0])
                     is_keyframe = True
 
-        for pid, ts, pos in pointers.recycle(is_keyframe):
-            add_touch_event(ts, pos, TouchAction.UP, pid)
+        for pid, ts, line_pos in pointers.recycle(is_keyframe):
+            add_touch_event(ts, line_pos, TouchAction.UP, pid)
 
-    for pid, ts, pos in pointers.finish():
-        add_touch_event(ts, pos, TouchAction.UP, pid)
+    for pid, ts, line_pos in pointers.finish():
+        add_touch_event(ts, line_pos, TouchAction.UP, pid)
     console.print('规划完毕.')
     return result

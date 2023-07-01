@@ -5,11 +5,9 @@ from enum import Enum
 import re
 from dataclasses import dataclass, field
 
-import numpy as np
-import numpy.typing as npt
-
+from basis import Position, Vector
 from easing import EasingFunction, EASING_FUNCTIONS
-from bamboo import Bamboo
+from bamboo import LivingBamboo
 
 
 class PecNoteType(Enum):
@@ -41,9 +39,8 @@ class PecNote:
 @dataclass
 class PecJudgeLine:
     notes: list[PecNote] = field(default_factory=list)
-    # speed: Bamboo[float] = field(default_factory=Bamboo)
-    degree: Bamboo[float] = field(default_factory=Bamboo)
-    position: Bamboo[npt.NDArray[np.float_]] = field(default_factory=Bamboo)
+    degree: LivingBamboo[float] = field(default_factory=LivingBamboo)
+    position: LivingBamboo[Position] = field(default_factory=LivingBamboo)
 
 
 class PecBpsInfo(NamedTuple):
@@ -96,7 +93,7 @@ class PecChart:
         self.lines = defaultdict(PecJudgeLine)
 
         # 将pec格式的内容转换为python代码，让python解释器帮助我们解析执行
-        content = re.sub(r'''["'+eghijklnoqstuwxyzA-Z\-*/]''', '', content)  # 避免不必要的麻烦
+        content = re.sub(r'''["'+eghijklnoqstuwxyzA-Z*/]''', '', content)  # 避免不必要的麻烦
         content = (
             '\n'.join(
                 re.sub(r'\s+', ' ', line.strip()).replace(' ', '(', 1).replace(' ', ',') + ')'
@@ -129,7 +126,7 @@ class PecChart:
             beats, position_x, above, fake = args
             start = self._beats_to_seconds(beats)
             end = None
-        note = PecNote(note_type_enum, start, position_x * 5 / 8, 1.0, 1.0, bool(above), end)
+        note = PecNote(note_type_enum, start, position_x * 25 / 36, 1.0, 1.0, bool(above), end)
         if not fake:
             self.lines[line_number].notes.append(note)
         return note
@@ -164,7 +161,7 @@ class PecChart:
     def _cp(self, line_number: int, beats: float, x: float, y: float) -> None:
         # set position
         seconds = self._beats_to_seconds(beats)
-        self.lines[line_number].position.cut(seconds, np.array((x, y)))
+        self.lines[line_number].position.cut(seconds, complex(x, y))
 
     def _cd(self, line_number: int, beats: float, degree: float) -> None:
         # set degree
@@ -180,7 +177,7 @@ class PecChart:
         seconds_start = self._beats_to_seconds(start_beats)
         seconds_end = self._beats_to_seconds(end_beats)
         self.lines[line_number].position.embed(
-            seconds_start, seconds_end, np.array(0), np.array((x, y)), RPE_EASING_FUNCS[easing_type]
+            seconds_start, seconds_end, 0, complex(x, y), RPE_EASING_FUNCS[easing_type]
         )
 
     def _cr(self, line_number: int, start_beats: float, end_beats: float, end: float, easing_type: int) -> None:

@@ -1,12 +1,12 @@
 # 较为激进的规划算法
 
 import math
+import cmath
 from typing import Iterator, NamedTuple
 from dataclasses import dataclass
 from collections import defaultdict
 
-from chart import Chart
-from note import NoteType
+from basis import Chart, NoteType, Position, Vector
 from .algo_base import TouchAction, VirtualTouchEvent, recalc_pos, in_screen
 
 
@@ -17,8 +17,8 @@ from rich.progress import track
 class PlainNote(NamedTuple):
     type: NoteType
     timestamp: int
-    pos: tuple[float, float]
-    angle: float
+    pos: Position
+    angle: Vector
 
 
 class Frame:
@@ -31,8 +31,8 @@ class Frame:
         self.timestamp = timestamp
         self.unallocated = defaultdict(list)
 
-    def add(self, note_type: NoteType, pos: tuple[float, float], angle: float) -> None:
-        pos = recalc_pos(pos, math.sin(angle), math.cos(angle))
+    def add(self, note_type: NoteType, pos: Position, angle: Vector) -> None:
+        pos = recalc_pos(pos, cmath.exp(angle * 1j))
         self.unallocated[note_type].append(PlainNote(note_type, self.timestamp, pos, angle))
 
     def taps(self) -> Iterator[PlainNote]:
@@ -82,18 +82,18 @@ class Pointer:
 def distance_of(note1: PlainNote | None, note2: PlainNote | None) -> float:
     if note1 is None or note2 is None:
         return math.inf
-    x1, y1 = note1.pos
-    x2, y2 = note2.pos
-    return (x2 - x1) ** 2 + (y2 - y1) ** 2
+    return abs(note2.pos - note1.pos)
 
 
 FLICK_START = -30
 FLICK_END = 30
 FLICK_DURATION = FLICK_END - FLICK_START
-FLICK_RADIUS = 30
+FLICK_RADIUS = 3 / 8
 
 
 class PointerAllocator:
+    RECYCLE_SCOPE = 1.25
+
     pointers: list[Pointer]
     events: defaultdict[int, list[VirtualTouchEvent]]
     last_timestamp: int | None
@@ -106,15 +106,13 @@ class PointerAllocator:
 
     def _find_available_pointers(self, note: PlainNote) -> Pointer | None:
         """查找当前屏幕上可以直接拿来用的指针
-        查找条件：距离目标点100个单位之内的、已经被废弃的指针
+        查找条件：距离目标点RECYCLE_SCOPE个单位之内的、已经被废弃的指针
         """
-        ox, oy = note.pos
-        ca, sa = math.cos(note.angle), math.sin(note.angle)
+        angle = note.angle
         for pointer in self.pointers:
             if pointer.note is None or pointer.age <= 0:  # 忽略闲置指针和正在FLICK的指针
                 continue
-            px, py = pointer.note.pos
-            if abs((px - ox) * ca + (py - oy) * sa) < 100:
+            if abs(((pointer.note.pos - note.pos) * angle.conjugate()).real) < self.RECYCLE_SCOPE:
                 return pointer
         return None
 
@@ -139,15 +137,14 @@ class PointerAllocator:
             self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.DOWN, pointer.id))
         else:
             self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.MOVE, pointer.id))
-        alpha = note.angle
-        sa, ca = math.sin(alpha), math.cos(alpha)
-        px, py = recalc_pos(note.pos, sa, ca)  # 对于flick，需先判断是否在屏幕内判定，否则之后生成的一系列滑动事件将会被recalc_pos给映射到同一点，使得flick漏判
-        x, y = recalc_pos(note.pos, sa, ca)
+        angle = note.angle
+        note_pos = 0j
+        pos = recalc_pos(note.pos, angle)
         for delta in range(FLICK_DURATION):
             rate = 1 - 2 * delta / FLICK_DURATION
-            px, py = (x - rate * FLICK_RADIUS * ca, y + rate * FLICK_RADIUS * sa)
-            self._insert(self.now + delta, VirtualTouchEvent((px, py), TouchAction.MOVE, pointer.id))
-        pointer.note = note._replace(pos=(px, py))
+            note_pos = pos - angle.conjugate() * rate * FLICK_RADIUS
+            self._insert(self.now + delta, VirtualTouchEvent(note_pos, TouchAction.MOVE, pointer.id))
+        pointer.note = note._replace(pos=note_pos)
         pointer.age = FLICK_START - FLICK_END
 
     def _drag(self, pointer: Pointer, note: PlainNote) -> None:
@@ -207,41 +204,37 @@ def solve(chart: Chart, console: Console) -> defaultdict[int, list[VirtualTouchE
 
     # 统计frames
     for line in track(chart.judge_lines, description='统计操作帧...', console=console):
-        for note in line.notes_above + line.notes_below:
-            ms = round(line.seconds(note.time) * 1000)
-            off_x = note.x * 80
-            x, y = line.pos(note.time)
-            alpha = -line.angle(note.time) * math.pi / 180
-            pos = x + off_x * math.cos(alpha), y + off_x * math.sin(alpha)
+        for note in line.notes:
+            ms = round(note.seconds * 1000)
+            angle = cmath.exp(line.angle[note.seconds] * 1j)
+            pos = line.position[note.seconds] + angle * note.x
             match note.type:
                 case NoteType.HOLD:
-                    hold_ms = math.ceil(line.seconds(note.hold) * 1000)
-                    frames[ms].add(NoteType.TAP, pos, alpha)
+                    hold_ms = math.ceil(note.hold * 1000)
+                    frames[ms].add(NoteType.TAP, pos, angle)
                     for offset in range(1, hold_ms + 1):
-                        alpha = -line.angle(line.time((ms + offset) / 1000)) * math.pi / 180
+                        time = (ms + offset) / 1000
+                        angle = cmath.exp(line.angle[time] * 1j)
                         frames[ms + offset].add(
-                            NoteType.DRAG, line.pos_of(note, line.time((ms + offset) / 1000)), alpha
+                            NoteType.DRAG, line.pos(time, note.x), angle
                         )
                 case NoteType.FLICK:
                     if not in_screen(pos):
                         # 这块的逻辑在algo1.py中有解释
-                        px, py = pos
                         for dt in range(-3, 4):
-                            new_time = note.time + dt
-                            xx, yy = line.pos(new_time)
-                            new_alpha = -line.angle(new_time) * math.pi / 180
-                            new_sa = math.sin(new_alpha)
-                            new_ca = math.cos(new_alpha)
-                            pxx, pyy = xx + off_x * new_ca, yy + off_x * new_sa
-                            if in_screen((pxx, pyy)):
-                                console.print(f'[red]微调判定时间：flick(pos=({px, py}), time={note.time}) => flick(pos=({pxx}, {pyy}), time={new_time})[/red]')
-                                alpha = new_alpha
-                                pos = (pxx, pyy)
+                            new_time = note.seconds + dt * line.beat_duration()
+                            new_line_pos = line.position[new_time]
+                            new_angle = cmath.exp(line.angle[new_time] * 1j)
+                            new_note_pos = new_line_pos + angle * note.x
+                            if in_screen(new_note_pos):
+                                console.print(f'[red]微调判定时间：flick(pos=({(pos.real, pos.imag)}), time={note.seconds}s) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/red]')
+                                angle = new_angle
+                                pos = new_note_pos
                                 break
 
-                    frames[ms + FLICK_START].add(NoteType.FLICK, pos, alpha)
+                    frames[ms + FLICK_START].add(NoteType.FLICK, pos, angle)
                 case _:
-                    frames[ms].add(note.type, pos, alpha)
+                    frames[ms].add(note.type, pos, angle)
 
     console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 

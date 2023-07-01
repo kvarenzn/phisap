@@ -3,13 +3,18 @@ from typing import Self, IO
 from enum import Enum
 from typing import NamedTuple
 import math
+import cmath
 import json
 
 
-def distance_of(p1: tuple[float, float], p2: tuple[float, float]):
-    p1x, p1y = p1
-    p2x, p2y = p2
-    return math.sqrt((p2x - p1x) ** 2 + (p2y - p1y) ** 2)
+from basis import VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Position, Vector
+
+
+def distance_of(p1: Position, p2: Position) -> float:
+    return abs(p1 - p2)
+
+def unit_mul(p1: complex, p2: complex) -> complex:
+    return complex(p1.real * p2.real, p1.imag * p2.imag)
 
 
 def div(x: float, y: float) -> float:
@@ -20,21 +25,12 @@ def div(x: float, y: float) -> float:
         return math.nan
 
 
-def in_screen(pos: tuple[float, float]) -> bool:
-    x, y = pos
-    return (0 <= x <= 1280) and (0 <= y <= 720)
+def in_screen(pos: Position) -> bool:
+    return (0 <= pos.real <= VIRTUAL_WIDTH) and (0 <= pos.imag <= VIRTUAL_HEIGHT)
 
 
-def recalc_pos(position: tuple[float, float], sa: float, ca: float) -> tuple[float, float]:
+def recalc_pos(position: Position, rot_vec: Vector) -> Position:
     """重新计算坐标
-    一些情况下，note会在屏幕的外侧判定。点名批评Nhelv。
-    也就是说，此时横坐标会在[0, 1280]的范围外，或者纵坐标会在[0, 720]的范围外。
-    这是我们需要重新规划击打的位置，让该位置落在屏幕内。
-    我们利用屁股肉的垂直判定区域特性来解决这个问题。
-    也就是说，在高垂直于判定线且长度不限，同时宽平行且与note等长的矩形范围内点击任意位置均视为判定成功。
-    为了简化这个问题，我们将矩形视作一条线，这条线过矩形的终点且与矩形的两高平行。
-    这条线必与屏幕对应的矩形相交，且绝大部分情况下有两个交点。
-    我们取这两个交点的中心点作为我们操作note的位置。
     :param position: 坐标
     :param sa: sin(angle) 判定线偏移角度的正弦值
     :param ca: cos(angle) 判定线偏移角度的余弦值
@@ -44,23 +40,24 @@ def recalc_pos(position: tuple[float, float], sa: float, ca: float) -> tuple[flo
         return position
 
     # 重新计算note
-    px, py = position
+    c = (position * rot_vec.conjugate()).real
+
     sumx = sumy = 0
-    x1 = px + py * div(sa, ca)
-    y1 = py + px * div(ca, sa)
-    x2 = px - (720 - py) * div(sa, ca)
-    y2 = py - (1280 - px) * div(ca, sa)
-    if 0 < x1 < 1280:
+    x1 = div(c, rot_vec.real)
+    y1 = div(c, rot_vec.imag)
+    x2 = div(c - VIRTUAL_HEIGHT * rot_vec.imag, rot_vec.real)
+    y2 = div(c - VIRTUAL_WIDTH * rot_vec.real, rot_vec.imag)
+    if 0 < x1 < VIRTUAL_WIDTH:
         sumx += x1
-    if 0 < y1 < 720:
+    if 0 < y1 < VIRTUAL_HEIGHT:
         sumy += y1
-    if 0 < x2 < 1280:
+    if 0 < x2 < VIRTUAL_WIDTH:
         sumx += x2
-        sumy += 720
-    if 0 < y2 < 720:
+        sumy += VIRTUAL_HEIGHT
+    if 0 < y2 < VIRTUAL_HEIGHT:
         sumy += y2
-        sumx += 1280
-    return sumx / 2, sumy / 2
+        sumx += VIRTUAL_WIDTH
+    return complex(sumx / 2, sumy / 2)
 
 
 class TouchAction(Enum):
@@ -81,25 +78,24 @@ class TouchEvent(NamedTuple):
 
 
 class VirtualTouchEvent(NamedTuple):
-    pos: tuple[float, float]
+    pos: Position
     action: TouchAction
     pointer: int
 
     def __str__(self) -> str:
-        x, y = self.pos
-        return f'''TouchEvent<{self.pointer} {self.action.name} @ ({x:4.2f}, {y:4.2f})>'''
+        return f'''TouchEvent<{self.pointer} {self.action.name} @ ({self.pos.real:4.2f}, {self.pos.imag:4.2f})>'''
 
     def to_serializable(self) -> dict:
-        return {'pos': self.pos, 'action': self.action.value, 'pointer': self.pointer}
+        return {'pos': [self.pos.real, self.pos.imag], 'action': self.action.value, 'pointer': self.pointer}
 
     @classmethod
     def from_serializable(cls, obj: dict) -> Self:
-        return VirtualTouchEvent(obj['pos'], TouchAction(obj['action']), obj['pointer'])
+        x, y = obj['pos']
+        return VirtualTouchEvent(complex(x, y), TouchAction(obj['action']), obj['pointer'])
 
     def map_to(self, x_offset: int, y_offset: int, x_scale: float, y_scale: float) -> TouchEvent:
-        x_orig, y_orig = self.pos
         return TouchEvent(
-            pos=(x_offset + round(x_orig * x_scale), y_offset + round(y_orig * y_scale)),
+            pos=(x_offset + round(self.pos.real * x_scale), y_offset + round(self.pos.imag * y_scale)),
             action=self.action,
             pointer=self.pointer,
         )
