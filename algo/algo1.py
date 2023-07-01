@@ -160,7 +160,7 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
     for line in track(chart.judge_lines, description='正在统计帧...', console=console):
         for event in line.notes_above + line.notes_below:
             ms = round(line.seconds(event.time) * 1000)
-            off_x = event.x * 72
+            off_x = event.x * 80
             x, y = line.pos(event.time)
             alpha = -line.angle(event.time) * math.pi / 180
             sa = math.sin(alpha)

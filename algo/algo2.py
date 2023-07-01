@@ -209,7 +209,7 @@ def solve(chart: Chart, console: Console) -> defaultdict[int, list[VirtualTouchE
     for line in track(chart.judge_lines, description='统计操作帧...', console=console):
         for note in line.notes_above + line.notes_below:
             ms = round(line.seconds(note.time) * 1000)
-            off_x = note.x * 72
+            off_x = note.x * 80
             x, y = line.pos(note.time)
             alpha = -line.angle(note.time) * math.pi / 180
             pos = x + off_x * math.cos(alpha), y + off_x * math.sin(alpha)
