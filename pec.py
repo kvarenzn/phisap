@@ -41,7 +41,7 @@ class PecNote:
 @dataclass
 class PecJudgeLine:
     notes: list[PecNote] = field(default_factory=list)
-    speed: Bamboo[float] = field(default_factory=Bamboo)
+    # speed: Bamboo[float] = field(default_factory=Bamboo)
     degree: Bamboo[float] = field(default_factory=Bamboo)
     position: Bamboo[npt.NDArray[np.float_]] = field(default_factory=Bamboo)
 
@@ -129,7 +129,7 @@ class PecChart:
             beats, position_x, above, fake = args
             start = self._beats_to_seconds(beats)
             end = None
-        note = PecNote(note_type_enum, start, position_x / 1024, 1.0, 1.0, bool(above), end)
+        note = PecNote(note_type_enum, start, position_x * 5 / 8, 1.0, 1.0, bool(above), end)
         if not fake:
             self.lines[line_number].notes.append(note)
         return note
@@ -158,10 +158,8 @@ class PecChart:
         raise RuntimeError('???')
 
     def _cv(self, line_number: int, beats: float, speed: float) -> None:
-        # set velocity
-        # TODO: find out why 5.85?
-        seconds = self._beats_to_seconds(beats)
-        self.lines[line_number].speed.cut(seconds, speed / 5.85)
+        # ignore speed event
+        pass
 
     def _cp(self, line_number: int, beats: float, x: float, y: float) -> None:
         # set position
@@ -199,4 +197,4 @@ class PecChart:
 
 if __name__ == '__main__':
     pec = PecChart(open('../phira/489/Guitar&Lonely&Blue Planet.pec').read())
-    print(pec.lines[0].speed.joints)
+    print(pec.lines[0].position)
