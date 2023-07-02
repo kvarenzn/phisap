@@ -7,11 +7,12 @@ import cmath
 import json
 
 
-from basis import VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Position, Vector
+from basis import Position, Vector
 
 
 def distance_of(p1: Position, p2: Position) -> float:
     return abs(p1 - p2)
+
 
 def unit_mul(p1: complex, p2: complex) -> complex:
     return complex(p1.real * p2.real, p1.imag * p2.imag)
@@ -25,39 +26,43 @@ def div(x: float, y: float) -> float:
         return math.nan
 
 
-def in_screen(pos: Position) -> bool:
-    return (0 <= pos.real <= VIRTUAL_WIDTH) and (0 <= pos.imag <= VIRTUAL_HEIGHT)
+class ScreenUtil:
+    width: int
+    height: int
 
+    flick_radius: float
 
-def recalc_pos(position: Position, rot_vec: Vector) -> Position:
-    """重新计算坐标
-    :param position: 坐标
-    :param sa: sin(angle) 判定线偏移角度的正弦值
-    :param ca: cos(angle) 判定线偏移角度的余弦值
-    :return: 重新计算后的坐标
-    """
-    if in_screen(position):
-        return position
+    def __init__(self, width: int, height: int) -> None:
+        self.width = width
+        self.height = height
+        self.flick_radius = width * 0.1
 
-    # 重新计算note
-    c = (position * rot_vec.conjugate()).real
+    def visible(self, pos: Position) -> bool:
+        return (0 <= pos.real <= self.width) and (0 <= pos.imag <= self.height)
 
-    sumx = sumy = 0
-    x1 = div(c, rot_vec.real)
-    y1 = div(c, rot_vec.imag)
-    x2 = div(c - VIRTUAL_HEIGHT * rot_vec.imag, rot_vec.real)
-    y2 = div(c - VIRTUAL_WIDTH * rot_vec.real, rot_vec.imag)
-    if 0 < x1 < VIRTUAL_WIDTH:
-        sumx += x1
-    if 0 < y1 < VIRTUAL_HEIGHT:
-        sumy += y1
-    if 0 < x2 < VIRTUAL_WIDTH:
-        sumx += x2
-        sumy += VIRTUAL_HEIGHT
-    if 0 < y2 < VIRTUAL_HEIGHT:
-        sumy += y2
-        sumx += VIRTUAL_WIDTH
-    return complex(sumx / 2, sumy / 2)
+    def remap(self, position: Position, rotation: Vector) -> Position:
+        if self.visible(position):
+            return position
+
+        # 重新计算note
+        c = (position * rotation.conjugate()).real
+
+        sumx = sumy = 0
+        x1 = div(c, rotation.real)
+        y1 = div(c, rotation.imag)
+        x2 = div(c - self.height * rotation.imag, rotation.real)
+        y2 = div(c - self.width * rotation.real, rotation.imag)
+        if 0 < x1 < self.width:
+            sumx += x1
+        if 0 < y1 < self.height:
+            sumy += y1
+        if 0 < x2 < self.width:
+            sumx += x2
+            sumy += self.height
+        if 0 < y2 < self.height:
+            sumy += y2
+            sumx += self.width
+        return complex(sumx / 2, sumy / 2)
 
 
 class TouchAction(Enum):
@@ -93,7 +98,7 @@ class VirtualTouchEvent(NamedTuple):
         x, y = obj['pos']
         return VirtualTouchEvent(complex(x, y), TouchAction(obj['action']), obj['pointer'])
 
-    def map_to(self, x_offset: int, y_offset: int, x_scale: float, y_scale: float) -> TouchEvent:
+    def _map_to(self, x_offset: int, y_offset: int, x_scale: float, y_scale: float) -> TouchEvent:
         return TouchEvent(
             pos=(x_offset + round(self.pos.real * x_scale), y_offset + round(self.pos.imag * y_scale)),
             action=self.action,
@@ -101,18 +106,49 @@ class VirtualTouchEvent(NamedTuple):
         )
 
 
-def export_to_json(ans: dict[int, list[VirtualTouchEvent]], out_file: IO):
-    json.dump(
-        {timestamp: [event.to_serializable() for event in events] for timestamp, events in ans.items()},
-        out_file,
+class WindowGeometry(NamedTuple):
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+def remap_events(
+    screen: ScreenUtil, geometry: WindowGeometry, answer: dict[int, list[VirtualTouchEvent]]
+) -> list[tuple[int, list[TouchEvent]]]:
+    result = []
+    x_scale = geometry.w / screen.width
+    y_scale = geometry.h / screen.height
+    for ts in sorted(answer.keys()):
+        converted = []
+        for event in answer[ts]:
+            converted.append(
+                TouchEvent(
+                    (geometry.x + round(event.pos.real * x_scale), geometry.y + round(event.pos.imag * y_scale)),
+                    event.action,
+                    event.pointer,
+                )
+            )
+        result.append((ts, converted))
+    return result
+
+
+def dump_to_json(screen: ScreenUtil, ans: dict[int, list[VirtualTouchEvent]]):
+    return json.dumps(
+        {
+            'width': screen.width,
+            'height': screen.height,
+            'events': {timestamp: [event.to_serializable() for event in events] for timestamp, events in ans.items()},
+        }
     )
 
 
-def load_from_json(in_file: IO) -> dict[int, list[VirtualTouchEvent]]:
-    return {
+def load_from_json(content: str) -> tuple[ScreenUtil, dict[int, list[VirtualTouchEvent]]]:
+    dic = json.loads(content)
+    return ScreenUtil(dic['width'], dic['height']), {
         int(ts): [VirtualTouchEvent.from_serializable(event) for event in events]
-        for ts, events in json.load(in_file).items()
+        for ts, events in dic['events'].items()
     }
 
 
-__all__ = ['TouchAction', 'VirtualTouchEvent', 'TouchEvent', 'distance_of', 'recalc_pos', 'in_screen']
+__all__ = ['TouchAction', 'VirtualTouchEvent', 'TouchEvent', 'distance_of', 'ScreenUtil']

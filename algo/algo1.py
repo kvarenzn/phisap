@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 
-from .algo_base import TouchAction, VirtualTouchEvent, distance_of, recalc_pos, in_screen
+from .algo_base import TouchAction, VirtualTouchEvent, distance_of, ScreenUtil
 from basis import Chart, NoteType, Position, Vector
 
 from rich.console import Console
@@ -46,12 +46,15 @@ class PointerManager:
     delta: int
     now: int
 
+    recycle_scope: float
+
     recycled: set[int]
     unused: dict[int, Pointer]
     unused_now: dict[int, Pointer]
     mark_as_released: list[int]
 
-    def __init__(self, begin: int, delta: int = 1) -> None:
+    def __init__(self, recycle_scope: float, begin: int, delta: int = 1) -> None:
+        self.recycle_scope = recycle_scope
         self.begin = begin
         self.max_pointer_id = begin
         self.pointers = {}
@@ -82,7 +85,7 @@ class PointerManager:
             ptr.pos = event.point
             return ptr.pid, False
         if not new:
-            nearest_distance = 2.5
+            nearest_distance = self.recycle_scope
             nearest_pid = None
             for pid, ptr in self.unused.items():
                 if (d := distance_of(event.point, ptr.pos)) < nearest_distance:
@@ -138,11 +141,12 @@ class PointerManager:
             yield ptr.pid, ptr.timestamp + 1, ptr.pos
 
 
-def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
+def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[VirtualTouchEvent]]]:
+    screen = ScreenUtil(chart.screen_width, chart.screen_height)
+
     flick_start = -30
-    FLICK_END = 30
-    FLICK_DURATION = FLICK_END - flick_start
-    FLICK_RADIUS = 3 / 8
+    flick_end = 30
+    flick_duration = flick_end - flick_start
 
     frames: defaultdict[int, list[FrameEvent]] = defaultdict(list)
 
@@ -152,8 +156,8 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
     current_event_id = 0
 
     def flick_pos(pos: Position, offset: int, rot_vec: Vector) -> Position:
-        rate = 1 - 2 * (offset - flick_start) / FLICK_DURATION
-        return pos - rot_vec.conjugate() * FLICK_RADIUS * rate
+        rate = 1 - 2 * (offset - flick_start) / flick_duration
+        return pos - rot_vec.conjugate() * screen.flick_radius * rate
 
     console.print('开始规划')
 
@@ -164,16 +168,16 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
             line_pos = line.position[note.seconds]
             off_x = note.x
             alpha = line.angle[note.seconds]
-            rot_vec: Vector = cmath.exp(alpha * 1j)
-            note_pos = line_pos + rot_vec * off_x
+            rotation: Vector = cmath.exp(alpha * 1j)
+            note_pos = line_pos + rotation * off_x
 
             match note.type:
                 case NoteType.TAP:
-                    add_frame_event(ms, FrameEventAction.TAP, recalc_pos(note_pos, rot_vec), current_event_id)
+                    add_frame_event(ms, FrameEventAction.TAP, screen.remap(note_pos, rotation), current_event_id)
                 case NoteType.DRAG:
-                    add_frame_event(ms, FrameEventAction.DRAG, recalc_pos(note_pos, rot_vec), current_event_id)
+                    add_frame_event(ms, FrameEventAction.DRAG, screen.remap(note_pos, rotation), current_event_id)
                 case NoteType.FLICK:
-                    if not in_screen(note_pos):
+                    if not screen.visible(note_pos):
                         # 给DESTRUCTION 3,2,1打个补丁
                         # 这首歌的IN难度的最后一个flick是在屏幕外判定的，你敢信？
                         # 这个flick的触发时刻为26752，然而它所在的判定线在26752时刻时的位置在(w/2, -h/2)
@@ -190,55 +194,56 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
                         # 对于DESTRUCTION 3,2,1，在之后的一个时间戳(26753)，判定点的位置便是(w/2, h/2)
                         # 也就是在屏幕的中心
                         found = False
-                        for dt in range(-3, 4):  # 查找的范围为[event.time - 3, event.time + 3]
-                            new_time = note.seconds + dt * line.beat_duration()
+                        for dt in range(-10, 10):  # 查找的范围为[event.time - 3, event.time + 3]
+                            new_time = note.seconds + dt * line.beat_duration(note.seconds)
                             new_line_pos = line.position[new_time]
                             new_alpha = line.angle[new_time]
                             new_rot_vec = cmath.exp(new_alpha * 1j)
                             new_note_pos = new_line_pos + new_rot_vec * off_x
-                            if in_screen(new_note_pos):
+                            if screen.visible(new_note_pos):
                                 found = True
                                 console.print(
                                     f'[red]微调判定时间：flick(pos=({(note_pos.real, note_pos.imag)}), time={note.seconds}) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time})[/red]'
                                 )
-                                rot_vec = new_rot_vec
+                                rotation = new_rot_vec
                                 note_pos = new_note_pos
                                 break
 
                         if not found:
                             # 对于另外一些情况，我们没有找到这个时间戳
                             # 这是我们假设此处使用了垂直判定机制，使用recalc_pos找到一个屏幕内的可行判定点
-                            note_pos = recalc_pos(note_pos, rot_vec)
+                            note_pos = screen.remap(note_pos, rotation)
+                            console.print(f'[red]微调失败，采取备用方案 => flick(pos=({(note_pos.real, note_pos.imag)})[/red]')
 
                     add_frame_event(
                         ms + flick_start,
                         FrameEventAction.FLICK_START,
-                        recalc_pos(flick_pos(note_pos, flick_start, rot_vec), rot_vec),
+                        screen.remap(flick_pos(note_pos, flick_start, rotation), rotation),
                         current_event_id,
                     )
-                    for offset in range(flick_start + 1, FLICK_END):
+                    for offset in range(flick_start + 1, flick_end):
                         add_frame_event(
                             ms + offset,
                             FrameEventAction.FLICK,
-                            recalc_pos(flick_pos(note_pos, offset, rot_vec), rot_vec),
+                            screen.remap(flick_pos(note_pos, offset, rotation), rotation),
                             current_event_id,
                         )
                     add_frame_event(
-                        ms + FLICK_END,
+                        ms + flick_end,
                         FrameEventAction.FLICK_END,
-                        recalc_pos(flick_pos(note_pos, FLICK_END, rot_vec), rot_vec),
+                        screen.remap(flick_pos(note_pos, flick_end, rotation), rotation),
                         current_event_id,
                     )
                 case NoteType.HOLD:
                     hold_ms = math.ceil(note.hold * 1000)
-                    add_frame_event(ms, FrameEventAction.HOLD_START, recalc_pos(note_pos, rot_vec), current_event_id)
+                    add_frame_event(ms, FrameEventAction.HOLD_START, screen.remap(note_pos, rotation), current_event_id)
                     for offset in range(1, hold_ms):
                         new_time = (ms + offset) / 1000
                         angle = line.angle[new_time]
                         add_frame_event(
                             ms + offset,
                             FrameEventAction.HOLD,
-                            recalc_pos(line.pos(new_time, note.x), cmath.exp(angle * 1j)),
+                            screen.remap(line.pos(new_time, note.x), cmath.exp(angle * 1j)),
                             current_event_id,
                         )
                     new_time = (ms + hold_ms) / 1000
@@ -246,14 +251,14 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
                     add_frame_event(
                         ms + hold_ms,
                         FrameEventAction.HOLD_END,
-                        recalc_pos(line.pos(new_time, note.x), cmath.exp(angle * 1j)),
+                        screen.remap(line.pos(new_time, note.x), cmath.exp(angle * 1j)),
                         current_event_id,
                     )
             current_event_id += 1
 
     console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
-    pointers = PointerManager(1000)
+    pointers = PointerManager((chart.screen_width + chart.screen_height) / 10, 1000)
 
     result: defaultdict[int, list[VirtualTouchEvent]] = defaultdict(list)
 
@@ -293,4 +298,4 @@ def solve(chart: Chart, console: Console) -> dict[int, list[VirtualTouchEvent]]:
     for pid, ts, line_pos in pointers.finish():
         add_touch_event(ts, line_pos, TouchAction.UP, pid)
     console.print('规划完毕.')
-    return result
+    return screen, result

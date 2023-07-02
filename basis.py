@@ -3,12 +3,6 @@ from enum import IntEnum
 from bamboo import Bamboo
 from typing import TypeAlias, NamedTuple
 
-# 屏幕长为16个单位，宽为9个单位
-# 所有的时间单位统一为秒
-
-VIRTUAL_WIDTH = 16
-VIRTUAL_HEIGHT = 9
-
 
 class NoteType(IntEnum):
     UNKNOWN = -1
@@ -39,9 +33,12 @@ class JudgeLine(metaclass=ABCMeta):
         ...
 
     @abstractmethod
-    def beat_duration(self) -> float: ...
+    def beat_duration(self, seconds: float) -> float:
+        ...
 
 
 class Chart(metaclass=ABCMeta):
+    screen_width: int
+    screen_height: int
     offset: float
     judge_lines: list[JudgeLine]

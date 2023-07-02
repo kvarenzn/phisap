@@ -3,6 +3,9 @@ build/
 .gradle/
 .idea/
 .vscode/
+.cache.d/
+*.pec
+*.json
 server.jar
 cache
 scrcpy-server-*

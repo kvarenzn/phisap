@@ -78,8 +78,8 @@ class PgrJudgeLine(JudgeLine):
                 self.position.cut(
                     event['startTime'] * beats_length,
                     event['endTime'] * beats_length,
-                    complex((sv // 1000) / 880, (sv % 1000) / 520),
-                    complex((ev // 1000) / 880, (ev % 1000) / 520)
+                    complex(sv // 1000, sv % 1000),
+                    complex(ev // 1000, ev % 1000)
                 )
         else:
             for event in dic['judgeLineMoveEvents']:
@@ -96,7 +96,7 @@ class PgrJudgeLine(JudgeLine):
         pos = self.position[seconds]
         return pos + cmath.exp(angle * 1j) * position_x
 
-    def beat_duration(self) -> float:
+    def beat_duration(self, _: float) -> float:
         return 1.875 * self.bpm
 
 
@@ -106,6 +106,12 @@ class PgrChart(Chart):
 
     def __init__(self, dic: PgrChartDict) -> None:
         version = dic['formatVersion']
+        if version == 1:
+            self.screen_width = 880
+            self.screen_height = 520
+        else:
+            self.screen_width = 16
+            self.screen_height = 9
         self.offset = dic['offset']
         self.judge_lines = [
             PgrJudgeLine(line, version) for line in dic['judgeLineList']

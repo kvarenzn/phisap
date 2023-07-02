@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from collections import defaultdict
 
 from basis import Chart, NoteType, Position, Vector
-from .algo_base import TouchAction, VirtualTouchEvent, recalc_pos, in_screen
+from .algo_base import TouchAction, VirtualTouchEvent, ScreenUtil
 
 
 from rich.console import Console
@@ -24,15 +24,17 @@ class PlainNote(NamedTuple):
 class Frame:
     """一帧长度为10ms"""
 
+    screen: ScreenUtil
     timestamp: int
     unallocated: defaultdict[NoteType, list[PlainNote]]
 
-    def __init__(self, timestamp: int) -> None:
+    def __init__(self, screen: ScreenUtil, timestamp: int) -> None:
+        self.screen = screen
         self.timestamp = timestamp
         self.unallocated = defaultdict(list)
 
     def add(self, note_type: NoteType, pos: Position, angle: Vector) -> None:
-        pos = recalc_pos(pos, cmath.exp(angle * 1j))
+        pos = self.screen.remap(pos, cmath.exp(angle * 1j))
         self.unallocated[note_type].append(PlainNote(note_type, self.timestamp, pos, angle))
 
     def taps(self) -> Iterator[PlainNote]:
@@ -55,14 +57,16 @@ class Frame:
 
 
 class Frames:
+    screen: ScreenUtil
     frames: dict[int, Frame]
 
-    def __init__(self) -> None:
+    def __init__(self, screen: ScreenUtil) -> None:
+        self.screen = screen
         self.frames = {}
 
     def __getitem__(self, timestamp: int) -> Frame:
         if timestamp not in self.frames:
-            self.frames[timestamp] = Frame(timestamp)
+            self.frames[timestamp] = Frame(self.screen, timestamp)
         return self.frames[timestamp]
 
     def __iter__(self) -> Iterator[Frame]:
@@ -88,18 +92,17 @@ def distance_of(note1: PlainNote | None, note2: PlainNote | None) -> float:
 FLICK_START = -30
 FLICK_END = 30
 FLICK_DURATION = FLICK_END - FLICK_START
-FLICK_RADIUS = 3 / 8
-
 
 class PointerAllocator:
-    RECYCLE_SCOPE = 1.25
-
+    screen: ScreenUtil
     pointers: list[Pointer]
     events: defaultdict[int, list[VirtualTouchEvent]]
     last_timestamp: int | None
     now: int
 
-    def __init__(self, max_pointers_count: int = 10, begin_at: int = 1000):
+    def __init__(self, screen: ScreenUtil, max_pointers_count: int = 10, begin_at: int = 1000):
+        self.screen = screen
+        self.recycle_scope = (screen.width + screen.height) / 20
         self.pointers = [Pointer(i + begin_at) for i in range(max_pointers_count)]
         self.events = defaultdict(list)
         self.last_timestamp = None
@@ -112,7 +115,7 @@ class PointerAllocator:
         for pointer in self.pointers:
             if pointer.note is None or pointer.age <= 0:  # 忽略闲置指针和正在FLICK的指针
                 continue
-            if abs(((pointer.note.pos - note.pos) * angle.conjugate()).real) < self.RECYCLE_SCOPE:
+            if abs(((pointer.note.pos - note.pos) * angle.conjugate()).real) < self.recycle_scope:
                 return pointer
         return None
 
@@ -139,10 +142,10 @@ class PointerAllocator:
             self._insert(self.now, VirtualTouchEvent(note.pos, TouchAction.MOVE, pointer.id))
         angle = note.angle
         note_pos = 0j
-        pos = recalc_pos(note.pos, angle)
+        pos = self.screen.remap(note.pos, angle)
         for delta in range(FLICK_DURATION):
             rate = 1 - 2 * delta / FLICK_DURATION
-            note_pos = pos - angle.conjugate() * rate * FLICK_RADIUS
+            note_pos = pos - angle.conjugate() * rate * self.screen.flick_radius
             self._insert(self.now + delta, VirtualTouchEvent(note_pos, TouchAction.MOVE, pointer.id))
         pointer.note = note._replace(pos=note_pos)
         pointer.age = FLICK_START - FLICK_END
@@ -199,8 +202,9 @@ class PointerAllocator:
         return self.events
 
 
-def solve(chart: Chart, console: Console) -> defaultdict[int, list[VirtualTouchEvent]]:
-    frames = Frames()
+def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, defaultdict[int, list[VirtualTouchEvent]]]:
+    screen = ScreenUtil(chart.screen_width, chart.screen_height)
+    frames = Frames(screen)
 
     # 统计frames
     for line in track(chart.judge_lines, description='统计操作帧...', console=console):
@@ -219,14 +223,14 @@ def solve(chart: Chart, console: Console) -> defaultdict[int, list[VirtualTouchE
                             NoteType.DRAG, line.pos(time, note.x), angle
                         )
                 case NoteType.FLICK:
-                    if not in_screen(pos):
+                    if not screen.visible(pos):
                         # 这块的逻辑在algo1.py中有解释
                         for dt in range(-3, 4):
-                            new_time = note.seconds + dt * line.beat_duration()
+                            new_time = note.seconds + dt * line.beat_duration(note.seconds)
                             new_line_pos = line.position[new_time]
                             new_angle = cmath.exp(line.angle[new_time] * 1j)
                             new_note_pos = new_line_pos + angle * note.x
-                            if in_screen(new_note_pos):
+                            if screen.visible(new_note_pos):
                                 console.print(f'[red]微调判定时间：flick(pos=({(pos.real, pos.imag)}), time={note.seconds}s) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/red]')
                                 angle = new_angle
                                 pos = new_note_pos
@@ -238,12 +242,12 @@ def solve(chart: Chart, console: Console) -> defaultdict[int, list[VirtualTouchE
 
     console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
-    allocator = PointerAllocator()
+    allocator = PointerAllocator(screen)
 
     for frame in track(frames, description='规划触控事件...'):
         allocator.allocate(frame)
 
-    return allocator.done()
+    return screen, allocator.done()
 
 
 __all__ = ['solve']

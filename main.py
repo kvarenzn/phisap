@@ -10,16 +10,19 @@ from threading import Thread
 from catalog import Catalog
 from control import DeviceController
 from extract import AssetsManager, TextAsset
-from algo.algo_base import load_from_json, export_to_json
+from algo.algo_base import load_from_json, dump_to_json, ScreenUtil, WindowGeometry, remap_events
+from basis import Chart
 from pgr import PgrChart
+from pec import PecChart
+from cache_manager import CacheManager
 
 from rich.console import Console
 from rich.progress import track
 
-PHISAP_VERSION = '0.3'
+PHISAP_VERSION = '0.4'
 
 
-def extract_apk(console: Console):
+def extract_apk(console: Console) -> None:
     apk_path = filedialog.askopenfilename(filetypes=[('安装包', '.apk'), ('通用数据包', '.obb')], title='请选择要解包的游戏安装包或通用数据包')
     if not apk_path:
         return
@@ -38,11 +41,13 @@ def extract_apk(console: Console):
     try:
         catalog = Catalog(apk_file.open('assets/aa/catalog.json'))
     except KeyError:
-        messagebox.showerror('解包失败',
-                             '未在包内找到catalog.json\n'
-                             '这可能是由于安装包损坏，或者你的安装包是Google Play版本的\n'
-                             '如果是后者，请提取对应的obb文件，并解包该文件\n'
-                             '详见phisap的README说明')
+        messagebox.showerror(
+            '解包失败',
+            '未在包内找到catalog.json\n'
+            '这可能是由于安装包损坏，或者你的安装包是Google Play版本的\n'
+            '如果是后者，请提取对应的obb文件，并解包该文件\n'
+            '详见phisap的README说明',
+        )
 
     if not catalog:
         return
@@ -56,7 +61,6 @@ def extract_apk(console: Console):
     popup.title('已加载')
     popup.update()
     manager.read_assets(console)
-
 
     popup.title('正在解包，请稍候...')
     popup.update()
@@ -80,6 +84,15 @@ def extract_apk(console: Console):
     popup.destroy()
 
 
+def find_custom_chart(output: StringVar) -> None:
+    apk_path = filedialog.askopenfilename(
+        filetypes=[('JSON格式谱面(pgr)', '.json'), ('PEC专用格式(pec)', '.pec')], title='请选择要加载的客制谱面'
+    )
+    if not apk_path:
+        return
+    output.set(apk_path)
+
+
 def agreement():
     if os.path.exists('./cache'):
         return
@@ -92,6 +105,7 @@ class App(ttk.Frame):
     SYNC_MODE_MANUAL = 1
 
     cache: configparser.ConfigParser | None
+    cache_manager: CacheManager
     serials: list[str]
     running: bool
     start_time: float
@@ -108,14 +122,8 @@ class App(ttk.Frame):
         self.running = True
         self.start_time = 0.0
         self.cache = None
+        self.cache_manager = CacheManager()
         self.pack()
-
-        frm = ttk.Frame()
-        frm.pack()
-        self.extract_btn = ttk.Button(frm, text='提取谱面', command=lambda: extract_apk(self.console))
-        self.extract_btn.pack()
-
-        ttk.Separator(orient='horizontal').pack(fill=X)
 
         frm = ttk.Frame()
         frm.pack()
@@ -133,38 +141,54 @@ class App(ttk.Frame):
         self.sync_mode = IntVar()
         self.sync_mode.set(self.SYNC_MODE_MANUAL)
 
-        frm = ttk.Frame()
-        frm.pack()
-
-        ttk.Label(frm, text='计时器同步方式：').grid(column=0, row=0)
-
-        self.sync_mode1 = ttk.Radiobutton(
-            frm, text='延时同步', variable=self.sync_mode, value=self.SYNC_MODE_DELAY, command=self.sync_mode_changed
-        )
-        self.sync_mode2 = ttk.Radiobutton(
-            frm, text='手动同步', variable=self.sync_mode, value=self.SYNC_MODE_MANUAL, command=self.sync_mode_changed
-        )
-        self.sync_mode1.grid(column=2, row=0)
-        self.sync_mode2.grid(column=1, row=0)
-
         ttk.Separator(orient='horizontal').pack(fill=X)
 
-        frm = ttk.Frame()
-        frm.pack()
+        self.chart_select_tabs = ttk.Notebook()
+        self.chart_select_tabs.pack(fill='both')
 
-        ttk.Label(frm, text='曲目ID：').grid(column=0, row=0)
+        ##### LOAD_MODE_EXTRACT_APK BEGIN #####
+        self.frame_extract_apk = ttk.Frame()
+        self.chart_select_tabs.add(self.frame_extract_apk, text='解包原版谱面')
+
+        frm_top = ttk.Frame(self.frame_extract_apk)
+        frm_top.grid(column=0, row=0)
+
+        ttk.Label(frm_top, text='曲目ID：').grid(column=0, row=0)
 
         self.song_id = StringVar()
-        self.songs_select = ttk.Combobox(frm, state='readonly', values=[], textvariable=self.song_id)
+        self.songs_select = ttk.Combobox(frm_top, state='readonly', values=[], textvariable=self.song_id)
         self.songs_select.grid(column=1, row=0)
         self.songs_select.bind('<<ComboboxSelected>>', self.song_selected)
 
-        ttk.Label(frm, text='难度：').grid(column=0, row=1)
+        self.extract_btn = ttk.Button(frm_top, text='提取谱面', command=lambda: extract_apk(self.console))
+        self.extract_btn.grid(column=2, row=0)
+
+        frm_btm = ttk.Frame(self.frame_extract_apk)
+        frm_btm.grid(column=0, row=1)
+
+        ttk.Label(frm_btm, text='难度：').grid(column=0, row=0)
 
         self.difficulty = StringVar()
-        self.difficulties_select = ttk.Combobox(frm, state='readonly', values=[], textvariable=self.difficulty)
-        self.difficulties_select.grid(column=1, row=1)
+        self.difficulties_select = ttk.Combobox(frm_btm, state='readonly', values=[], textvariable=self.difficulty)
+        self.difficulties_select.grid(column=1, row=0)
         self.difficulties_select.bind('<<ComboboxSelected>>', self.difficulty_selected)
+        ##### LOAD_MODE_EXTRACT_APK END #####
+
+        ##### LOAD_MODE_LOAD_CUSTOM BEGIN #####
+
+        self.frame_load_custom_chart = ttk.Frame()
+        self.chart_select_tabs.add(self.frame_load_custom_chart, text='加载客制谱面')
+
+        ttk.Label(self.frame_load_custom_chart, text='文件路径：').grid(column=0, row=0)
+        self.custom_chart_path = StringVar()
+        self.chart_path_edit = ttk.Entry(self.frame_load_custom_chart, textvariable=self.custom_chart_path)
+        self.chart_path_edit.grid(column=1, row=0)
+
+        self.select_custom_btn = ttk.Button(
+            self.frame_load_custom_chart, text='选择', command=lambda: find_custom_chart(self.custom_chart_path)
+        )
+        self.select_custom_btn.grid(column=2, row=0)
+        ##### LOAD_MODE_LOAD_CUSTOM END #####
 
         ttk.Separator(orient='horizontal').pack(fill=X)
 
@@ -179,25 +203,54 @@ class App(ttk.Frame):
 
         ttk.Separator(orient='horizontal').pack(fill=X)
 
-        ttk.Label()
+        self.process_settings_tabs = ttk.Notebook()
+        self.process_settings_tabs.pack(fill='both')
 
-        frm = ttk.Frame()
-        frm.pack()
+        ##### PROCESS_MODE_RUN BEGIN
+        self.frame_run = ttk.Frame()
+        self.process_settings_tabs.add(self.frame_run, text='自动打歌')
 
-        self.delay_lbl = ttk.Label(frm, text='延时时长：')
+        frm_top = ttk.Frame(self.frame_run)
+        frm_top.grid(column=0, row=0)
+
+        ttk.Label(frm_top, text='计时器同步方式：').grid(column=0, row=0)
+
+        self.sync_mode1 = ttk.Radiobutton(
+            frm_top, text='延时同步', variable=self.sync_mode, value=self.SYNC_MODE_DELAY, command=self.sync_mode_changed
+        )
+        self.sync_mode2 = ttk.Radiobutton(
+            frm_top, text='手动同步', variable=self.sync_mode, value=self.SYNC_MODE_MANUAL, command=self.sync_mode_changed
+        )
+        self.sync_mode1.grid(column=2, row=0)
+        self.sync_mode2.grid(column=1, row=0)
+
+        frm_mid = ttk.Frame(self.frame_run)
+        frm_mid.grid(column=0, row=1)
+        self.delay_lbl = ttk.Label(frm_mid, text='延时时长：')
         self.delay_lbl.grid(column=0, row=0)
 
         self.delay = DoubleVar()
-        self.delay_input = ttk.Spinbox(frm, increment=0.01, textvariable=self.delay, from_=-100, to=100)
+        self.delay_input = ttk.Spinbox(frm_mid, increment=0.01, textvariable=self.delay, from_=-100, to=100)
         self.delay_input.grid(column=1, row=0)
         self.delay_input['state'] = 'disabled'
 
-        ttk.Label(frm, text='秒').grid(column=2, row=0)
+        ttk.Label(frm_mid, text='秒').grid(column=2, row=0)
+        frm_btm = ttk.Frame(self.frame_run)
+        frm_btm.grid(column=0, row=2)
 
-        ttk.Separator(orient='horizontal').pack(fill=X)
+        self.go = ttk.Button(frm_btm, text='开始!', command=self.run)
+        self.go.pack(fill='both')
 
-        self.go = ttk.Button(text='开始!', command=self.run)
-        self.go.pack(anchor='center', expand=1)
+        ##### PROCESS_MODE_RUN END #####
+
+        ##### PROCESS_MODE_PREPROCESS_ONLY BEGIN
+        self.frame_preprocess_only = ttk.Frame()
+        self.process_settings_tabs.add(self.frame_preprocess_only, text='仅执行规划算法')
+
+        self.proc = ttk.Button(self.frame_preprocess_only, text='执行！', command=self.process)
+        self.proc.pack(fill='both')
+
+        ##### PROCESS_MODE_PREPROCESS_ONLY END
 
         ttk.Separator(orient='horizontal').pack(fill=X)
 
@@ -250,7 +303,7 @@ class App(ttk.Frame):
                 if 'ans' not in file
             ]
             self.difficulties_select['values'] = difficulties
-        except (configparser.NoOptionError, FileNotFoundError) :
+        except (configparser.NoOptionError, FileNotFoundError):
             cache.set('cache', 'songid', '')
             self.song_id.set('')
             self.difficulties_select['values'] = []
@@ -258,7 +311,7 @@ class App(ttk.Frame):
         try:
             self.difficulty.set(difficulty := cache.get('cache', 'difficulty'))
             algos = ['algo1', 'algo2']
-            if os.path.exists(f'./Assets/Tracks/{self.song_id.get()}/Chart_{difficulty}.json.ans.json'):
+            if self.cache_manager.has_cache(open(f'./Assets/Tracks/{self.song_id.get()}/Chart_{difficulty}.json').read()):
                 algos.insert(0, '不规划(使用缓存)')
             self.algo_select['values'] = algos
         except configparser.NoOptionError:
@@ -293,36 +346,84 @@ class App(ttk.Frame):
             algos.insert(0, '不规划(使用缓存)')
         self.algo_select['values'] = algos
 
+    def get_selected_path(self) -> tuple[int, str]:
+        selection = self.chart_select_tabs.index('current')
+        if selection == 0:
+            return selection, f'./Assets/Tracks/{self.song_id.get()}/Chart_{self.difficulty.get()}.json'
+        else:
+            return selection, self.custom_chart_path.get()
+
+    def process(self):
+        try:
+            selection, chart_path = self.get_selected_path()
+            algo_method = self.algo.get()
+            assert algo_method == 'algo1' or algo_method == 'algo2'
+            content = open(chart_path).read()
+            chart: Chart
+            if selection == 0:
+                chart = PgrChart(json.loads(content))
+            else:
+                if chart_path.endswith('.pec'):
+                    chart = PecChart(content)
+                else:
+                    chart = PgrChart(json.loads(content))
+
+            screen: ScreenUtil
+            ans: dict
+
+            if algo_method == 'algo1':
+                import algo.algo1
+
+                screen, ans = algo.algo1.solve(chart, self.console)
+            else:
+                import algo.algo2
+
+                screen, ans = algo.algo2.solve(chart, self.console)
+
+            self.cache_manager.write_cache_of_content(content, dump_to_json(screen, ans))
+        except Exception:
+            self.console.print_exception(show_locals=True)
+
     def run(self):
         try:
             import time
 
-            chart_path = f'./Assets/Tracks/{self.song_id.get()}/Chart_{self.difficulty.get()}.json'
+            selection, chart_path = self.get_selected_path()
 
-            chart = PgrChart(json.load(open(chart_path)))
+            content = open(chart_path).read()
+            if selection == 0:
+                assert self.cache
+                assert self.cache_path
+                self.cache.set('cache', 'songid', self.song_id.get())
+                self.cache.set('cache', 'difficulty', self.difficulty.get())
+                self.cache.set('cache', 'offset', str(self.delay.get()))
+                self.cache.write(open(self.cache_path, 'w'))
 
-            assert self.cache
-            assert self.cache_path
-            self.cache.set('cache', 'songid', self.song_id.get())
-            self.cache.set('cache', 'difficulty', self.difficulty.get())
-            self.cache.set('cache', 'offset', str(self.delay.get()))
-            self.cache.write(open(self.cache_path, 'w'))
+                chart = PgrChart(json.loads(content))
+            else:
+                if chart_path.endswith('.pec'):
+                    chart = PecChart(content)
+                else:
+                    chart = PgrChart(json.loads(content))
 
             algo_method = self.algo.get()
             ans: dict
-            ans_file = chart_path + '.ans.json'
+            screen: ScreenUtil
+
             if algo_method == '不规划(使用缓存)':
-                ans = load_from_json(open(ans_file))
+                ans_json = self.cache_manager.find_cache_for_content(content)
+                assert ans_json is not None
+                screen, ans = load_from_json(ans_json)
             elif algo_method == 'algo1':
                 import algo.algo1
 
-                ans = algo.algo1.solve(chart, self.console)
-                export_to_json(ans, open(ans_file, 'w'))
+                screen, ans = algo.algo1.solve(chart, self.console)
+                self.cache_manager.write_cache_of_content(content, dump_to_json(screen, ans))
             elif algo_method == 'algo2':
                 import algo.algo2
 
-                ans = algo.algo2.solve(chart, self.console)
-                export_to_json(ans, open(ans_file, 'w'))
+                screen, ans = algo.algo2.solve(chart, self.console)
+                self.cache_manager.write_cache_of_content(content, dump_to_json(screen, ans))
             else:
                 raise RuntimeError(f'unknown algo_method: {algo_method}')
 
@@ -342,12 +443,10 @@ class App(ttk.Frame):
             width = height * 16 // 9
             xoffset = (device_width - width) >> 1
             yoffset = (device_height - height) >> 1
-            scale_factor = height / 9
 
-            adapted_ans = [
-                (timestamp, [ev.map_to(xoffset, yoffset, scale_factor, scale_factor) for ev in ans[timestamp]])
-                for timestamp in sorted(ans.keys())
-            ]
+            geometry = WindowGeometry((device_width - width) >> 1, (device_height - height) >> 1, width, height)
+
+            adapted_ans = remap_events(screen, geometry, ans)
 
             ans_iter = iter(adapted_ans)
 

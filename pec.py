@@ -1,25 +1,21 @@
-from typing import Self, NamedTuple
+from typing import Self, NamedTuple, Optional
 from functools import partial
 from collections import defaultdict
-from enum import Enum
 import re
 from dataclasses import dataclass, field
+import cmath
+import math
 
-from basis import Position, Vector
+from basis import Position, Chart, JudgeLine, NoteType, Note
 from easing import EasingFunction, EASING_FUNCTIONS
 from bamboo import LivingBamboo
 
 
-class PecNoteType(Enum):
-    TAP = 1
-    HOLD = 2
-    FLICK = 3
-    DRAG = 4
-
+PEC_NOTE_TYPES = [NoteType.UNKNOWN, NoteType.TAP, NoteType.HOLD, NoteType.FLICK, NoteType.DRAG]
 
 @dataclass
 class PecNote:
-    type: PecNoteType
+    type: NoteType
     time: float
     position_x: float
     speed: float
@@ -35,12 +31,33 @@ class PecNote:
         self.scale = scale
         return self
 
+    def to_note(self) -> Note:
+        return Note(self.type, self.time, (self.end_time or self.time) - self.time, self.position_x)
+
+
 
 @dataclass
-class PecJudgeLine:
-    notes: list[PecNote] = field(default_factory=list)
-    degree: LivingBamboo[float] = field(default_factory=LivingBamboo)
+class PecJudgeLine(JudgeLine):
+    pec_notes: list[PecNote] | None = field(default_factory=list)
+    notes: list[Note] = field(default_factory=list)
+    angle: LivingBamboo[float] = field(default_factory=LivingBamboo)
     position: LivingBamboo[Position] = field(default_factory=LivingBamboo)
+    chart: Optional['PecChart'] = None
+
+    def beat_duration(self, seconds: float) -> float:
+        if self.chart:
+            return self.chart._beats_to_seconds(seconds)
+        return 1.875 / 175
+
+    def pos(self, seconds: float, position_x: float) -> Position:
+        angle = self.angle[seconds]
+        pos = self.position[seconds]
+        return pos + cmath.exp(angle * 1j) * position_x
+    
+    def convert_notes(self) -> None:
+        if self.pec_notes is not None:
+            self.notes = [pec_note.to_note() for pec_note in self.pec_notes]
+            del self.pec_notes
 
 
 class PecBpsInfo(NamedTuple):
@@ -82,18 +99,22 @@ RPE_EASING_FUNCS: list[EasingFunction] = [
 
 
 @dataclass
-class PecChart:
+class PecChart(Chart):
     offset: float
     bpss: list[PecBpsInfo]
     lines: defaultdict[int, PecJudgeLine]
 
     def __init__(self, content: str):
+        super().__init__()
+        self.screen_width = 2048
+        self.screen_height = 1400
+
         self.offset = 0
         self.bpss = []
         self.lines = defaultdict(PecJudgeLine)
 
         # 将pec格式的内容转换为python代码，让python解释器帮助我们解析执行
-        content = re.sub(r'''["'+eghijklnoqstuwxyzA-Z*/]''', '', content)  # 避免不必要的麻烦
+        content = re.sub(r'''["'+eghijkloqstuwxyzA-Z*/]''', '', content)  # 避免不必要的麻烦
         content = (
             '\n'.join(
                 re.sub(r'\s+', ' ', line.strip()).replace(' ', '(', 1).replace(' ', ',') + ')'
@@ -115,10 +136,15 @@ class PecChart:
             {},
         )
 
+        self.judge_lines = []
+        for line in self.lines.values():
+            line.convert_notes()
+            self.judge_lines.append(line)
+
     def _note(self, note_type: int, line_number: int, *args) -> PecNote:
         # the tap note
-        note_type_enum = PecNoteType(note_type)
-        if note_type_enum == PecNoteType.HOLD:
+        note_type_enum = PEC_NOTE_TYPES[note_type]
+        if note_type_enum == NoteType.HOLD:
             start_beats, end_beats, position_x, above, fake = args
             start = self._beats_to_seconds(start_beats)
             end = self._beats_to_seconds(end_beats)
@@ -126,9 +152,11 @@ class PecChart:
             beats, position_x, above, fake = args
             start = self._beats_to_seconds(beats)
             end = None
-        note = PecNote(note_type_enum, start, position_x * 25 / 36, 1.0, 1.0, bool(above), end)
+        note = PecNote(note_type_enum, start, position_x, 1.0, 1.0, bool(above), end)
         if not fake:
-            self.lines[line_number].notes.append(note)
+            pec_notes = self.lines[line_number].pec_notes
+            assert pec_notes is not None
+            pec_notes.append(note)
         return note
 
     def _off(self, offset: int) -> None:
@@ -166,7 +194,7 @@ class PecChart:
     def _cd(self, line_number: int, beats: float, degree: float) -> None:
         # set degree
         seconds = self._beats_to_seconds(beats)
-        self.lines[line_number].degree.cut(seconds, degree)
+        self.lines[line_number].angle.cut(seconds, degree * math.pi / 180)
 
     def _ca(self, line_number: int, beats: float, opacity: float) -> None:
         # ignore opacity setting event
@@ -185,7 +213,7 @@ class PecChart:
         seconds_start = self._beats_to_seconds(start_beats)
         seconds_end = self._beats_to_seconds(end_beats)
         line = self.lines[line_number]
-        line.degree.embed(seconds_start, seconds_end, 0, end, RPE_EASING_FUNCS[easing_type])
+        line.angle.embed(seconds_start, seconds_end, 0, end * math.pi / 180, RPE_EASING_FUNCS[easing_type])
 
     def _cf(self, line_number: int, start_beats: float, end_beats: float, end: float) -> None:
         # ignore opacity setting event
