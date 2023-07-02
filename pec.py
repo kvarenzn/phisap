@@ -13,6 +13,7 @@ from bamboo import LivingBamboo
 
 PEC_NOTE_TYPES = [NoteType.UNKNOWN, NoteType.TAP, NoteType.HOLD, NoteType.FLICK, NoteType.DRAG]
 
+
 @dataclass
 class PecNote:
     type: NoteType
@@ -35,7 +36,6 @@ class PecNote:
         return Note(self.type, self.time, (self.end_time or self.time) - self.time, self.position_x)
 
 
-
 @dataclass
 class PecJudgeLine(JudgeLine):
     pec_notes: list[PecNote] | None = field(default_factory=list)
@@ -53,7 +53,7 @@ class PecJudgeLine(JudgeLine):
         angle = self.angle[seconds]
         pos = self.position[seconds]
         return pos + cmath.exp(angle * 1j) * position_x
-    
+
     def convert_notes(self) -> None:
         if self.pec_notes is not None:
             self.notes = [pec_note.to_note() for pec_note in self.pec_notes]
@@ -66,35 +66,38 @@ class PecBpsInfo(NamedTuple):
     bps: float  # beats per second
 
 
+# TODO: ensure 'outin' functions
 RPE_EASING_FUNCS: list[EasingFunction] = [
-    (lambda _: _),
-    (lambda _: _),
-    EASING_FUNCTIONS['sine_out'],
-    EASING_FUNCTIONS['sine_in'],
-    EASING_FUNCTIONS['sine_inout'],
-    EASING_FUNCTIONS['quad_inout'],
-    EASING_FUNCTIONS['cubic_out'],
-    EASING_FUNCTIONS['cubic_in'],
-    EASING_FUNCTIONS['quant_out'],
-    EASING_FUNCTIONS['quant_in'],
-    EASING_FUNCTIONS['cubic_inout'],
-    EASING_FUNCTIONS['quant_inout'],
-    EASING_FUNCTIONS['quint_out'],
-    EASING_FUNCTIONS['quint_in'],
-    EASING_FUNCTIONS['expo_out'],
-    EASING_FUNCTIONS['expo_in'],
-    EASING_FUNCTIONS['circ_out'],
-    EASING_FUNCTIONS['circ_in'],
-    EASING_FUNCTIONS['back_out'],
-    EASING_FUNCTIONS['back_in'],
-    EASING_FUNCTIONS['circ_inout'],
-    EASING_FUNCTIONS['back_inout'],
-    EASING_FUNCTIONS['elastic_out'],
-    EASING_FUNCTIONS['elastic_in'],
-    EASING_FUNCTIONS['bounce_out'],
-    EASING_FUNCTIONS['bounce_in'],
-    EASING_FUNCTIONS['bounce_inout'],
-    EASING_FUNCTIONS['elastic_inout'],
+    (lambda _: _),  # 0
+    (lambda _: _),  # 1
+    EASING_FUNCTIONS['sine_out'],  # 2
+    EASING_FUNCTIONS['sine_in'],  # 3
+    EASING_FUNCTIONS['quad_in'],  # 4
+    EASING_FUNCTIONS['quad_out'],  # 5
+    EASING_FUNCTIONS['sine_outin'],  # 6
+    EASING_FUNCTIONS['quad_outin'],  # 7
+    EASING_FUNCTIONS['cubic_in'],  # 8
+    EASING_FUNCTIONS['cubic_out'],  # 9
+    EASING_FUNCTIONS['quart_in'],  # 10
+    EASING_FUNCTIONS['quart_out'],  # 11
+    EASING_FUNCTIONS['cubic_outin'],  # 12
+    EASING_FUNCTIONS['quart_outin'],  # 13
+    EASING_FUNCTIONS['quint_in'],  # 14
+    EASING_FUNCTIONS['quint_out'],  # 15
+    EASING_FUNCTIONS['expo_in'],  # 16
+    EASING_FUNCTIONS['expo_out'],  # 17
+    EASING_FUNCTIONS['circ_in'],  # 18
+    EASING_FUNCTIONS['circ_out'],  # 19
+    EASING_FUNCTIONS['back_in'],  # 20
+    EASING_FUNCTIONS['back_out'],  # 21
+    EASING_FUNCTIONS['circ_outin'],  # 22
+    EASING_FUNCTIONS['back_outin'],  # 23
+    EASING_FUNCTIONS['elastic_in'],  # 24
+    EASING_FUNCTIONS['elastic_out'],  # 25
+    EASING_FUNCTIONS['bounce_in'],  # 26
+    EASING_FUNCTIONS['bounce_out'],  # 27
+    EASING_FUNCTIONS['bounce_outin'],  # 28
+    EASING_FUNCTIONS['elastic_outin'],  # 29
 ]
 
 
@@ -119,6 +122,7 @@ class PecChart(Chart):
             '\n'.join(
                 re.sub(r'\s+', ' ', line.strip()).replace(' ', '(', 1).replace(' ', ',') + ')'
                 for line in content.splitlines()
+                if line
             )
             .replace('\n#', '.sp')
             .replace('\n&', '.sc')
@@ -189,12 +193,12 @@ class PecChart(Chart):
     def _cp(self, line_number: int, beats: float, x: float, y: float) -> None:
         # set position
         seconds = self._beats_to_seconds(beats)
-        self.lines[line_number].position.cut(seconds, complex(x, y))
+        self.lines[line_number].position.cut(seconds, complex(x, self.screen_height - y))
 
     def _cd(self, line_number: int, beats: float, degree: float) -> None:
         # set degree
         seconds = self._beats_to_seconds(beats)
-        self.lines[line_number].angle.cut(seconds, degree * math.pi / 180)
+        self.lines[line_number].angle.cut(seconds, math.radians(degree))
 
     def _ca(self, line_number: int, beats: float, opacity: float) -> None:
         # ignore opacity setting event
@@ -205,7 +209,7 @@ class PecChart(Chart):
         seconds_start = self._beats_to_seconds(start_beats)
         seconds_end = self._beats_to_seconds(end_beats)
         self.lines[line_number].position.embed(
-            seconds_start, seconds_end, 0, complex(x, y), RPE_EASING_FUNCS[easing_type]
+            seconds_start, seconds_end, complex(x, self.screen_height - y), RPE_EASING_FUNCS[easing_type]
         )
 
     def _cr(self, line_number: int, start_beats: float, end_beats: float, end: float, easing_type: int) -> None:
@@ -213,7 +217,7 @@ class PecChart(Chart):
         seconds_start = self._beats_to_seconds(start_beats)
         seconds_end = self._beats_to_seconds(end_beats)
         line = self.lines[line_number]
-        line.angle.embed(seconds_start, seconds_end, 0, end * math.pi / 180, RPE_EASING_FUNCS[easing_type])
+        line.angle.embed(seconds_start, seconds_end, math.radians(end), RPE_EASING_FUNCS[easing_type])
 
     def _cf(self, line_number: int, start_beats: float, end_beats: float, end: float) -> None:
         # ignore opacity setting event
@@ -221,5 +225,30 @@ class PecChart(Chart):
 
 
 if __name__ == '__main__':
-    pec = PecChart(open('../phira/489/Guitar&Lonely&Blue Planet.pec').read())
-    print(pec.lines[0].position)
+    # 测试
+    pec = PecChart(open('../../test/phira/1636/Gee.pec').read())
+    import pygame
+
+    pygame.init()
+    screen = pygame.display.set_mode((2048 / 2, 1400 / 2))
+    clock = pygame.time.Clock()
+    running = True
+
+    seconds = 0
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        screen.fill('black')
+        pos = pec.judge_lines[0].position[seconds] / 2
+        angle = cmath.exp(pec.judge_lines[0].angle[seconds] * 1j)
+        left = pos + angle * 3500
+        right = pos - angle * 3500
+        print(seconds)
+        pygame.draw.circle(screen, 'white', (pos.real, pos.imag), 10)
+        pygame.draw.line(screen, 'white', (left.real, left.imag), (right.real, right.imag), 4)
+        pygame.display.flip()
+        seconds += clock.tick(60) / 1000
+    pygame.quit()

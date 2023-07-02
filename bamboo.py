@@ -1,6 +1,7 @@
 from typing import NamedTuple, TypeVar, Generic, Protocol, runtime_checkable
 from abc import ABCMeta, abstractmethod
 import bisect
+import math
 
 from easing import EasingFunction, LVALUE
 
@@ -37,6 +38,10 @@ class Bamboo(Generic[T], metaclass=ABCMeta):
         ...
 
 
+def equal(a: float, b: float) -> float:
+    return math.isclose(a, b, rel_tol=0.0001)
+
+
 class Segment(NamedTuple, Generic[T]):
     start: float
     end: float
@@ -58,7 +63,7 @@ class BrokenBamboo(Bamboo[T]):
         right = bisect.bisect_left(self.segments, time, key=lambda s: s.start)
         if right >= len(self.segments):
             return self.segments[-1].end_value
-        if self.segments[right].start == time:
+        if equal(self.segments[right].start, time):
             return self.segments[right].start_value
         seg = self.segments[right - 1]
         t = (time - seg.start) / (seg.end - seg.start)
@@ -76,6 +81,8 @@ class Joint(NamedTuple, Generic[T]):
     easing: EasingFunction
 
 
+# TODO timestamp全换成整数
+# TODO 修复overlap的问题
 class LivingBamboo(Bamboo[T]):
     joints: list[Joint[T]]
 
@@ -84,32 +91,56 @@ class LivingBamboo(Bamboo[T]):
 
     def cut(self, timestamp: float, value: T, easing: EasingFunction | None = None) -> None:
         easing = easing or LVALUE
-        bisect.insort_left(self.joints, Joint(timestamp, value, easing), key=lambda j: j.timestamp)
+        insert_point = bisect.bisect_left(self.joints, timestamp, key=lambda j: j.timestamp)
+        if not self.joints:
+            self.joints.append(Joint(timestamp, value, easing))
+            return
 
-    def embed(self, start: float, end: float, start_value: T, end_value: T, easing: EasingFunction) -> None:
+        # 处理浮点数精度问题
+        # 相近的timestamp合并成一个
+        if insert_point == len(self.joints):
+            if equal(self.joints[insert_point - 1].timestamp, timestamp):
+                self.joints[insert_point - 1] = self.joints[insert_point - 1]._replace(value=value, easing=easing)
+                return
+        else:
+            if equal(self.joints[insert_point].timestamp, timestamp):
+                self.joints[insert_point] = self.joints[insert_point]._replace(value=value, easing=easing)
+                return
+            elif insert_point > 0 and equal(self.joints[insert_point - 1].timestamp, timestamp):
+                self.joints[insert_point - 1] = self.joints[insert_point - 1]._replace(value=value, easing=easing)
+                return
+
+        self.joints.insert(insert_point, Joint(timestamp, value, easing))
+
+    def embed(self, start: float, end: float, end_value: T, easing: EasingFunction) -> None:
         assert start < end
         insert_point = bisect.bisect_left(self.joints, start, key=lambda j: j.timestamp)
-        if insert_point < len(self.joints) and self.joints[insert_point].timestamp == start:
+        if insert_point < len(self.joints) and equal(self.joints[insert_point].timestamp, start):
             # 更新起点记录，插入终点记录
             left_easing = self.joints[insert_point].easing
             self.joints[insert_point] = self.joints[insert_point]._replace(easing=easing)
-            assert insert_point >= len(self.joints) - 1 or self.joints[insert_point + 1].timestamp >= end
-            if insert_point >= len(self.joints) - 1 or self.joints[insert_point + 1].timestamp > end:
+            assert (
+                insert_point >= len(self.joints) - 1
+                or self.joints[insert_point + 1].timestamp >= end
+                or equal(self.joints[insert_point + 1].timestamp, end)
+            )
+            if insert_point >= len(self.joints) - 1 or not equal(self.joints[insert_point + 1].timestamp, end):
                 self.joints.insert(insert_point + 1, Joint(end, end_value, left_easing))
         elif insert_point == len(self.joints):
             # 在尾部插入起点记录和终点记录
-            self.joints.append(Joint(start, start_value, easing))
+            value = self.joints[-1].value  # 继承上个值
+            self.joints.append(Joint(start, value, easing))
             self.joints.append(Joint(end, end_value, self.joints[-2].easing))
         else:
             # 在中间插入起点记录，视情况更新现有终点记录/插入终点记录
-            assert self.joints[insert_point].timestamp >= end
-            if self.joints[insert_point].timestamp == end:
+            assert self.joints[insert_point].timestamp >= end or equal(self.joints[insert_point].timestamp, end)
+            if equal(self.joints[insert_point].timestamp, end):
                 self.joints[insert_point] = self.joints[insert_point]._replace(value=end_value)
-                self.joints.insert(insert_point, Joint(start, start_value, easing))
+                self.joints.insert(insert_point, Joint(start, self.joints[insert_point - 1].value, easing))
             else:
                 left_easing = self.joints[insert_point - 1].easing
                 self.joints.insert(insert_point, Joint(end, end_value, left_easing))
-                self.joints.insert(insert_point, Joint(start, start_value, easing))
+                self.joints.insert(insert_point, Joint(start, self.joints[insert_point - 1].value, easing))
 
     def __getitem__(self, time: float) -> T:
         right = bisect.bisect_left(self.joints, time, key=lambda j: j.timestamp)

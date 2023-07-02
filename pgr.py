@@ -67,8 +67,8 @@ class PgrJudgeLine(JudgeLine):
             self.angle.cut(
                 event['startTime'] * beats_length,
                 event['endTime'] * beats_length,
-                -event['start'] * math.pi / 180,
-                -event['end'] * math.pi / 180,
+                -math.radians(event['start']),
+                -math.radians(event['end']),
             )
         self.position = BrokenBamboo[Position]()
         if format_version == 1:

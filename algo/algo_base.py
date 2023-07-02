@@ -18,12 +18,20 @@ def unit_mul(p1: complex, p2: complex) -> complex:
     return complex(p1.real * p2.real, p1.imag * p2.imag)
 
 
-def div(x: float, y: float) -> float:
-    """自动处理除零异常"""
-    try:
-        return x / y
-    except ZeroDivisionError:
-        return math.nan
+def det(a: Position, b: Position) -> float:
+    return (a * b.conjugate() * 1j).real
+
+
+def intersect(line1: tuple[Position, Position], line2: tuple[Position, Position]) -> Position | None:
+    dl1 = line1[0] - line1[1]
+    dl2 = line2[0] - line2[1]
+    xd = complex(dl1.real, dl2.real)
+    yd = complex(dl1.imag, dl2.imag)
+    di = det(xd, yd)
+    if di == 0:
+        return None
+    d = complex(det(*line1), det(*line2))
+    return complex(det(d, xd) / di, det(d, yd) / di)
 
 
 class ScreenUtil:
@@ -40,29 +48,37 @@ class ScreenUtil:
     def visible(self, pos: Position) -> bool:
         return (0 <= pos.real <= self.width) and (0 <= pos.imag <= self.height)
 
-    def remap(self, position: Position, rotation: Vector) -> Position:
-        if self.visible(position):
-            return position
+    def remap(self, p: Position, rotation: Vector) -> Position:
+        if self.visible(p):
+            return p
 
-        # 重新计算note
-        c = (position * rotation.conjugate()).real
+        # 在直线上取一个新点q
+        q = p + rotation * 1j
 
-        sumx = sumy = 0
-        x1 = div(c, rotation.real)
-        y1 = div(c, rotation.imag)
-        x2 = div(c - self.height * rotation.imag, rotation.real)
-        y2 = div(c - self.width * rotation.real, rotation.imag)
-        if 0 < x1 < self.width:
-            sumx += x1
-        if 0 < y1 < self.height:
-            sumy += y1
-        if 0 < x2 < self.width:
-            sumx += x2
-            sumy += self.height
-        if 0 < y2 < self.height:
-            sumy += y2
-            sumx += self.width
-        return complex(sumx / 2, sumy / 2)
+        # 依次求与四条边所在直线的交点
+        j1 = intersect((p, q), (0, self.width))  # (0, 0) -> (W, 0)
+        j2 = intersect((p, q), (0, self.height * 1j))  # (0, 0) -> (0, H)
+        j3 = intersect((p, q), (self.width, complex(self.width, self.height)))  # (W, 0) -> (W, H)
+        j4 = intersect((p, q), (self.height * 1j, complex(self.width, self.height)))  # (0, H) -> (W, H)
+
+        s = 0
+        cnt = 0
+        if j1 is not None and (0 <= j1.real <= self.width):
+            s += j1
+            cnt += 1
+        if j2 is not None and (0 <= j2.imag <= self.height):
+            s += j2
+            cnt += 1
+        if j3 is not None and (0 <= j3.imag <= self.height):
+            s += j3
+            cnt += 1
+        if j4 is not None and (0 <= j4.real <= self.width):
+            s += j4
+            cnt += 1
+
+        if s == 0:
+            return complex(self.width, self.height) / 2
+        return s / cnt
 
 
 class TouchAction(Enum):

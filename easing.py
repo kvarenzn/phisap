@@ -54,15 +54,11 @@ def _out(expr: str) -> str:
 
 
 def _inout(expr: str) -> str:
-    return (
-        f'({_in(expr).replace("x", "(2 * x)")}) / 2 if x < 0.5 else ({_out(expr).replace("x", "(2 * x - 1)")}) / 2 + 1'
-    )
+    return f'({_in(expr).replace("x", "(2 * x)")}) / 2 if x < 0.5 else (1 + ({_out(expr).replace("x", "(2 * x - 1)")})) / 2'
 
 
 def _outin(expr: str) -> str:
-    return (
-        f'({_out(expr).replace("x", "(2 * x)")}) / 2 if x < 0.5 else ({_in(expr).replace("x", "(2 * x - 1)")}) / 2 + 1'
-    )
+    return f'({_out(expr).replace("x", "(2 * x)")}) / 2 if x < 0.5 else (1 + ({_in(expr).replace("x", "(2 * x - 1)")})) / 2'
 
 
 _EASING_BASIC_FUNCTIONS = {
@@ -70,7 +66,7 @@ _EASING_BASIC_FUNCTIONS = {
     'sine': 'sin(x * pi / 2)',
     'quad': 'x ** 2',
     'cubic': 'x ** 3',
-    'quant': 'x ** 4',
+    'quart': 'x ** 4',
     'quint': 'x ** 5',
     'circ': '1 - sqrt(1 - x * x)',
     'expo': '2. ** (10 * x - 10)',
@@ -91,16 +87,16 @@ def easing(easing_basic: tuple[str, str], suffix: Callable[[str], str]) -> Calla
     code = [c for c in f.co_consts if isinstance(c, CodeType)][0]
     return FunctionType(code, globals())
 
+
 EasingFunction = Callable[[float], float]
 
 EASING_FUNCTIONS: dict[str, EasingFunction] = {
-    b + s.__name__: easing((b, fn), s)
-    for s in _EASING_SUFFIXES
-    for b, fn in _EASING_BASIC_FUNCTIONS.items()
+    b + s.__name__: easing((b, fn), s) for s in _EASING_SUFFIXES for b, fn in _EASING_BASIC_FUNCTIONS.items()
 }
 
 LVALUE: EasingFunction = lambda _: 0
 RVALUE: EasingFunction = lambda _: 1
+
 
 class Easing3D(Enum):
     Linear = partial(_easing_linear)
