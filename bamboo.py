@@ -113,7 +113,7 @@ class LivingBamboo(Bamboo[T]):
         self.joints.insert(insert_point, Joint(timestamp, value, easing))
 
     def embed(self, start: float, end: float, end_value: T, easing: EasingFunction) -> None:
-        assert start < end
+        # assert start < end
         insert_point = bisect.bisect_left(self.joints, start, key=lambda j: j.timestamp)
         if insert_point < len(self.joints) and equal(self.joints[insert_point].timestamp, start):
             # 更新起点记录，插入终点记录

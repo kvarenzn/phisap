@@ -354,22 +354,33 @@ class App(ttk.Frame):
         else:
             return selection, self.custom_chart_path.get()
 
+    def load_chart(self) -> tuple[str, Chart]:
+        selection, chart_path = self.get_selected_path()
+        content = open(chart_path).read()
+        chart: Chart
+        if selection == 0:
+            # load from extracted chart files
+            chart = PgrChart(json.loads(content))
+        else:
+            # load from user provided location
+            try:
+                # assume this is a json file
+                # some PEC charts will name as '*.json' as well
+                if chart_path.endswith('.pec'):
+                    # if the file ends with '.pec', then it must not be a pgr/rpe format chart
+                    raise json.decoder.JSONDecodeError('Not a json file', '<manual>', 0)
+                j = json.loads(content)
+                chart = RpeChart(j) if 'META' in j else PgrChart(j)
+            except json.decoder.JSONDecodeError:
+                chart = PecChart(content)
+        return content, chart
+
+
     def process(self):
         try:
-            selection, chart_path = self.get_selected_path()
             algo_method = self.algo.get()
             assert algo_method == 'algo1' or algo_method == 'algo2'
-            content = open(chart_path).read()
-            chart: Chart
-            if selection == 0:
-                chart = PgrChart(json.loads(content))
-            else:
-                if chart_path.endswith('.pec'):
-                    chart = PecChart(content)
-                else:
-                    j = json.loads(content)
-                    chart = RpeChart(j) if 'META' in j else PgrChart(j)
-
+            content, chart = self.load_chart()
             screen: ScreenUtil
             ans: dict
 
@@ -390,24 +401,15 @@ class App(ttk.Frame):
         try:
             import time
 
-            selection, chart_path = self.get_selected_path()
+            # TODO: remove these lines
+            assert self.cache
+            assert self.cache_path
+            self.cache.set('cache', 'songid', self.song_id.get())
+            self.cache.set('cache', 'difficulty', self.difficulty.get())
+            self.cache.set('cache', 'offset', str(self.delay.get()))
+            self.cache.write(open(self.cache_path, 'w'))
 
-            content = open(chart_path).read()
-            if selection == 0:
-                assert self.cache
-                assert self.cache_path
-                self.cache.set('cache', 'songid', self.song_id.get())
-                self.cache.set('cache', 'difficulty', self.difficulty.get())
-                self.cache.set('cache', 'offset', str(self.delay.get()))
-                self.cache.write(open(self.cache_path, 'w'))
-
-                chart = PgrChart(json.loads(content))
-            else:
-                if chart_path.endswith('.pec'):
-                    chart = PecChart(content)
-                else:
-                    j = json.loads(content)
-                    chart = RpeChart(j) if 'META' in j else PgrChart(j)
+            content, chart = self.load_chart()
 
             algo_method = self.algo.get()
             ans: dict
