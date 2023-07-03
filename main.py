@@ -14,6 +14,7 @@ from algo.algo_base import load_from_json, dump_to_json, ScreenUtil, WindowGeome
 from basis import Chart
 from pgr import PgrChart
 from pec import PecChart
+from rpe import RpeChart
 from cache_manager import CacheManager
 
 from rich.console import Console
@@ -86,7 +87,7 @@ def extract_apk(console: Console) -> None:
 
 def find_custom_chart(output: StringVar) -> None:
     apk_path = filedialog.askopenfilename(
-        filetypes=[('JSON格式谱面(pgr)', '.json'), ('PEC专用格式(pec)', '.pec')], title='请选择要加载的客制谱面'
+        filetypes=[('JSON格式谱面(pgr, rpe)', '.json'), ('PEC专用格式(pec)', '.pec')], title='请选择要加载的客制谱面'
     )
     if not apk_path:
         return
@@ -366,7 +367,8 @@ class App(ttk.Frame):
                 if chart_path.endswith('.pec'):
                     chart = PecChart(content)
                 else:
-                    chart = PgrChart(json.loads(content))
+                    j = json.loads(content)
+                    chart = RpeChart(j) if 'META' in j else PgrChart(j)
 
             screen: ScreenUtil
             ans: dict
@@ -404,7 +406,8 @@ class App(ttk.Frame):
                 if chart_path.endswith('.pec'):
                     chart = PecChart(content)
                 else:
-                    chart = PgrChart(json.loads(content))
+                    j = json.loads(content)
+                    chart = RpeChart(j) if 'META' in j else PgrChart(j)
 
             algo_method = self.algo.get()
             ans: dict

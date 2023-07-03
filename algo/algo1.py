@@ -166,10 +166,10 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
         for note in line.notes:
             ms = round(note.seconds * 1000)
             line_pos = line.position[note.seconds]
-            off_x = note.x
+            delta = note.offset
             alpha = line.angle[note.seconds]
             rotation: Vector = cmath.exp(alpha * 1j)
-            note_pos = line_pos + rotation * off_x
+            note_pos = line_pos + rotation * delta
 
             match note.type:
                 case NoteType.TAP:
@@ -199,7 +199,7 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
                             new_line_pos = line.position[new_time]
                             new_alpha = line.angle[new_time]
                             new_rot_vec = cmath.exp(new_alpha * 1j)
-                            new_note_pos = new_line_pos + new_rot_vec * off_x
+                            new_note_pos = new_line_pos + new_rot_vec * delta
                             if screen.visible(new_note_pos):
                                 found = True
                                 console.print(
@@ -243,7 +243,7 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
                         add_frame_event(
                             ms + offset,
                             FrameEventAction.HOLD,
-                            screen.remap(line.pos(new_time, note.x), cmath.exp(angle * 1j)),
+                            screen.remap(line.pos(new_time, note.offset), cmath.exp(angle * 1j)),
                             current_event_id,
                         )
                     new_time = (ms + hold_ms) / 1000
@@ -251,7 +251,7 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
                     add_frame_event(
                         ms + hold_ms,
                         FrameEventAction.HOLD_END,
-                        screen.remap(line.pos(new_time, note.x), cmath.exp(angle * 1j)),
+                        screen.remap(line.pos(new_time, note.offset), cmath.exp(angle * 1j)),
                         current_event_id,
                     )
             current_event_id += 1

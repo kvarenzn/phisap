@@ -4,6 +4,10 @@ from bamboo import Bamboo
 from typing import TypeAlias, NamedTuple
 
 
+Position: TypeAlias = complex
+Vector: TypeAlias = complex
+
+
 class NoteType(IntEnum):
     UNKNOWN = -1
     TAP = 0
@@ -16,11 +20,7 @@ class Note(NamedTuple):
     type: NoteType
     seconds: float
     hold: float
-    x: float
-
-
-Position: TypeAlias = complex
-Vector: TypeAlias = complex
+    offset: Position
 
 
 class JudgeLine(metaclass=ABCMeta):
@@ -29,7 +29,7 @@ class JudgeLine(metaclass=ABCMeta):
     angle: Bamboo[float]
 
     @abstractmethod
-    def pos(self, seconds: float, position_x: float) -> Position:
+    def pos(self, seconds: float, offset: Position) -> Position:
         ...
 
     @abstractmethod

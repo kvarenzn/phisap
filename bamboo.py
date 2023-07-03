@@ -39,7 +39,7 @@ class Bamboo(Generic[T], metaclass=ABCMeta):
 
 
 def equal(a: float, b: float) -> float:
-    return math.isclose(a, b, rel_tol=0.0001)
+    return math.isclose(a, b, rel_tol=0.000000000000000001)
 
 
 class Segment(NamedTuple, Generic[T]):
@@ -119,11 +119,11 @@ class LivingBamboo(Bamboo[T]):
             # 更新起点记录，插入终点记录
             left_easing = self.joints[insert_point].easing
             self.joints[insert_point] = self.joints[insert_point]._replace(easing=easing)
-            assert (
-                insert_point >= len(self.joints) - 1
-                or self.joints[insert_point + 1].timestamp >= end
-                or equal(self.joints[insert_point + 1].timestamp, end)
-            )
+            # assert (
+            #     insert_point >= len(self.joints) - 1
+            #     or self.joints[insert_point + 1].timestamp >= end
+            #     or equal(self.joints[insert_point + 1].timestamp, end)
+            # )
             if insert_point >= len(self.joints) - 1 or not equal(self.joints[insert_point + 1].timestamp, end):
                 self.joints.insert(insert_point + 1, Joint(end, end_value, left_easing))
         elif insert_point == len(self.joints):
@@ -133,7 +133,7 @@ class LivingBamboo(Bamboo[T]):
             self.joints.append(Joint(end, end_value, self.joints[-2].easing))
         else:
             # 在中间插入起点记录，视情况更新现有终点记录/插入终点记录
-            assert self.joints[insert_point].timestamp >= end or equal(self.joints[insert_point].timestamp, end)
+            # assert self.joints[insert_point].timestamp >= end or equal(self.joints[insert_point].timestamp, end)
             if equal(self.joints[insert_point].timestamp, end):
                 self.joints[insert_point] = self.joints[insert_point]._replace(value=end_value)
                 self.joints.insert(insert_point, Joint(start, self.joints[insert_point - 1].value, easing))
@@ -156,5 +156,50 @@ class LivingBamboo(Bamboo[T]):
 
     def __repr__(self) -> str:
         if self.joints:
-            return f'''Bamboo(min={self.joints[0].timestamp}, max={self.joints[-1].timestamp}, total_joints={len(self.joints)})'''
-        return 'Bamboo(empty)'
+            return f'''LivingBamboo(min={self.joints[0].timestamp}, max={self.joints[-1].timestamp}, total_joints={len(self.joints)})'''
+        return 'LivingBamboo(empty)'
+
+class TwinBamboo(Bamboo[complex]):
+    xs: Bamboo[float]
+    ys: Bamboo[float]
+
+    def __init__(self, xs: Bamboo[float], ys: Bamboo[float]) -> None:
+        super().__init__()
+        self.xs = xs
+        self.ys = ys
+    
+    def __getitem__(self, time: float) -> complex:
+        return complex(self.xs[time], self.ys[time])
+
+    def __repr__(self) -> str:
+        return f'TwinBamboo(xs={self.xs}, ys={self.ys})'
+
+class Grove(Bamboo[T]):
+    bamboos: list[Bamboo[T]]
+    zero: T
+
+    def __init__(self, bamboos: list[Bamboo[T]], zero: T) -> None:
+        super().__init__()
+        self.bamboos = bamboos
+        self.zero = zero
+    
+    def __getitem__(self, time: float) -> T:
+        s = self.zero
+        for bamboo in self.bamboos:
+            s += bamboo[time]
+        return s
+    
+    def __repr__(self) -> str:
+        return f'Grove(of {len(self.bamboos)} bamboos)'
+
+class BambooShoot(Bamboo[T]):
+    const: T
+    def __init__(self, const: T) -> None:
+        super().__init__()
+        self.const = const
+    
+    def __getitem__(self, time: float) -> T:
+        return self.const
+    
+    def __repr__(self) -> str:
+        return f'BambooShoot({self.const})'

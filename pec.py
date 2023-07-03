@@ -9,6 +9,7 @@ import math
 from basis import Position, Chart, JudgeLine, NoteType, Note
 from easing import EasingFunction, EASING_FUNCTIONS
 from bamboo import LivingBamboo
+from rpe import RPE_EASING_FUNCS
 
 
 PEC_NOTE_TYPES = [NoteType.UNKNOWN, NoteType.TAP, NoteType.HOLD, NoteType.FLICK, NoteType.DRAG]
@@ -46,13 +47,15 @@ class PecJudgeLine(JudgeLine):
 
     def beat_duration(self, seconds: float) -> float:
         if self.chart:
-            return self.chart._beats_to_seconds(seconds)
+            for time_start, _, bps in reversed(self.chart.bpss):
+                if time_start <= seconds:
+                    return 1 / bps
         return 1.875 / 175
 
-    def pos(self, seconds: float, position_x: float) -> Position:
+    def pos(self, seconds: float, offset: Position) -> Position:
         angle = self.angle[seconds]
         pos = self.position[seconds]
-        return pos + cmath.exp(angle * 1j) * position_x
+        return pos + cmath.exp(angle * 1j) * offset
 
     def convert_notes(self) -> None:
         if self.pec_notes is not None:
@@ -64,41 +67,6 @@ class PecBpsInfo(NamedTuple):
     time: float  # seconds
     beats: float  # how many beats have passed
     bps: float  # beats per second
-
-
-# TODO: ensure 'outin' functions
-RPE_EASING_FUNCS: list[EasingFunction] = [
-    (lambda _: _),  # 0
-    (lambda _: _),  # 1
-    EASING_FUNCTIONS['sine_out'],  # 2
-    EASING_FUNCTIONS['sine_in'],  # 3
-    EASING_FUNCTIONS['quad_in'],  # 4
-    EASING_FUNCTIONS['quad_out'],  # 5
-    EASING_FUNCTIONS['sine_outin'],  # 6
-    EASING_FUNCTIONS['quad_outin'],  # 7
-    EASING_FUNCTIONS['cubic_in'],  # 8
-    EASING_FUNCTIONS['cubic_out'],  # 9
-    EASING_FUNCTIONS['quart_in'],  # 10
-    EASING_FUNCTIONS['quart_out'],  # 11
-    EASING_FUNCTIONS['cubic_outin'],  # 12
-    EASING_FUNCTIONS['quart_outin'],  # 13
-    EASING_FUNCTIONS['quint_in'],  # 14
-    EASING_FUNCTIONS['quint_out'],  # 15
-    EASING_FUNCTIONS['expo_in'],  # 16
-    EASING_FUNCTIONS['expo_out'],  # 17
-    EASING_FUNCTIONS['circ_in'],  # 18
-    EASING_FUNCTIONS['circ_out'],  # 19
-    EASING_FUNCTIONS['back_in'],  # 20
-    EASING_FUNCTIONS['back_out'],  # 21
-    EASING_FUNCTIONS['circ_outin'],  # 22
-    EASING_FUNCTIONS['back_outin'],  # 23
-    EASING_FUNCTIONS['elastic_in'],  # 24
-    EASING_FUNCTIONS['elastic_out'],  # 25
-    EASING_FUNCTIONS['bounce_in'],  # 26
-    EASING_FUNCTIONS['bounce_out'],  # 27
-    EASING_FUNCTIONS['bounce_outin'],  # 28
-    EASING_FUNCTIONS['elastic_outin'],  # 29
-]
 
 
 @dataclass
@@ -114,7 +82,7 @@ class PecChart(Chart):
 
         self.offset = 0
         self.bpss = []
-        self.lines = defaultdict(PecJudgeLine)
+        self.lines = defaultdict(lambda: PecJudgeLine(chart=self))
 
         # 将pec格式的内容转换为python代码，让python解释器帮助我们解析执行
         content = re.sub(r'''["'+eghijkloqstuwxyzA-Z*/]''', '', content)  # 避免不必要的麻烦
@@ -226,7 +194,7 @@ class PecChart(Chart):
 
 if __name__ == '__main__':
     # 测试
-    pec = PecChart(open('../../test/phira/1636/Gee.pec').read())
+    pec = PecChart(open('../../test/phira/2555/FREEDOM DiVE.pec').read())
     import pygame
 
     pygame.init()

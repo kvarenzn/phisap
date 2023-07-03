@@ -98,6 +98,66 @@ LVALUE: EasingFunction = lambda _: 0
 RVALUE: EasingFunction = lambda _: 1
 
 
+def easing_with_range(f: EasingFunction, left: float, right: float) -> EasingFunction:
+    fl = f(left)
+    fr = f(right)
+    d = fr - fl
+    return lambda t: (f(left + (right - left) * t) - fl) / d
+
+
+_BEZIER_SAMPLES_COUNT = 21
+_BEZIER_SAMPLE_STEP = 1 / (_BEZIER_SAMPLES_COUNT - 1)
+_NEWTON_MIN_STEP = 1e-3
+_NEWTON_STOP = 4
+_SUBDIVISION_PREC = 1e-7
+_SUBDIVISION_STOP = 10
+_SLOPE_EPS = 1e-7
+
+
+def cubic_rev_bezier(x1: float, y1: float, x2: float, y2: float) -> EasingFunction:
+    f = lambda a, b: ((a - b) * 3 + 1, b * 3 - a * 6, a * 3)
+    a1, a2, a3 = f(y1, y2)
+    b1, b2, b3 = f(x1, x2)
+
+    sample_table = [
+        (((b1 * i + b2) * i) + b3) * i for i in (j * _BEZIER_SAMPLE_STEP for j in range(_BEZIER_SAMPLES_COUNT))
+    ]
+
+    def inner(t: float) -> float:
+        if t == 0 or t == 1:
+            return ((a1 * t + a2) * t + a3) * t
+        i = min(int(t / _BEZIER_SAMPLE_STEP), _BEZIER_SAMPLES_COUNT - 1)
+        dist = (t - sample_table[i]) / (sample_table[i + 1] - sample_table[i])
+        tt = (i + dist) * _BEZIER_SAMPLE_STEP
+        slp = (b1 * 3 * tt + b2 * 2) * tt + b3
+        if slp <= _SLOPE_EPS:
+            pass
+        elif slp >= _NEWTON_MIN_STEP:
+            # newton iteration
+            for _ in range(_NEWTON_STOP):
+                diff = ((b1 * tt + b2) * tt + b3) * tt - t
+                tt -= diff / slp
+                slp = (b1 * 3 * tt + b2 * 2) * tt + b3
+                if slp <= _SLOPE_EPS:
+                    break
+        else:
+            # bisect
+            l, r = _BEZIER_SAMPLE_STEP * i, _BEZIER_SAMPLE_STEP * (i + 1)
+            tt = (l + r) / 2
+            for _ in range(_SUBDIVISION_STOP):
+                diff = ((b1 * tt + b2) * tt + b3) * tt - t
+                if abs(diff) <= _SUBDIVISION_PREC:
+                    break
+                if diff > 0:
+                    r = tt
+                else:
+                    l = tt
+                tt = (l + r) / 2
+        return ((a1 * tt + a2) * tt + a3) * tt
+
+    return inner
+
+
 class Easing3D(Enum):
     Linear = partial(_easing_linear)
     CubicBezier = partial(_easing_cubic_bezier)

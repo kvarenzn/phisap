@@ -91,10 +91,10 @@ class PgrJudgeLine(JudgeLine):
                     complex(event['end'] * 16, 9 * (1 - event['end2'])),
                 )
 
-    def pos(self, seconds: float, position_x: float) -> Position:
+    def pos(self, seconds: float, offset: Position) -> Position:
         angle = self.angle[seconds]
         pos = self.position[seconds]
-        return pos + cmath.exp(angle * 1j) * position_x
+        return pos + cmath.exp(angle * 1j) * offset
 
     def beat_duration(self, _: float) -> float:
         return 1.875 * self.bpm
