@@ -73,7 +73,7 @@ class PecBpsInfo(NamedTuple):
 class PecChart(Chart):
     offset: float
     bpss: list[PecBpsInfo]
-    lines: defaultdict[int, PecJudgeLine]
+    judge_lines: defaultdict[int, PecJudgeLine]
 
     def __init__(self, content: str):
         super().__init__()
@@ -82,7 +82,7 @@ class PecChart(Chart):
 
         self.offset = 0
         self.bpss = []
-        self.lines = defaultdict(lambda: PecJudgeLine(chart=self))
+        self.judge_lines = defaultdict(lambda: PecJudgeLine(chart=self))
 
         # 将pec格式的内容转换为python代码，让python解释器帮助我们解析执行
         content = re.sub(r'''["'+eghijkloqstuwxyzA-Z*/]''', '', content)  # 避免不必要的麻烦
@@ -108,10 +108,10 @@ class PecChart(Chart):
             {},
         )
 
-        self.judge_lines = []
-        for line in self.lines.values():
+        self.lines = []
+        for line in self.judge_lines.values():
             line.convert_notes()
-            self.judge_lines.append(line)
+            self.lines.append(line)
 
     def _note(self, note_type: int, line_number: int, *args) -> PecNote:
         # the tap note
@@ -126,7 +126,7 @@ class PecChart(Chart):
             end = None
         note = PecNote(note_type_enum, start, position_x, 1.0, 1.0, bool(above), end)
         if not fake:
-            pec_notes = self.lines[line_number].pec_notes
+            pec_notes = self.judge_lines[line_number].pec_notes
             assert pec_notes is not None
             pec_notes.append(note)
         return note
@@ -161,12 +161,12 @@ class PecChart(Chart):
     def _cp(self, line_number: int, beats: float, x: float, y: float) -> None:
         # set position
         seconds = self._beats_to_seconds(beats)
-        self.lines[line_number].position.cut(seconds, complex(x, self.screen_height - y))
+        self.judge_lines[line_number].position.cut(seconds, complex(x, self.screen_height - y))
 
     def _cd(self, line_number: int, beats: float, degree: float) -> None:
         # set degree
         seconds = self._beats_to_seconds(beats)
-        self.lines[line_number].angle.cut(seconds, math.radians(degree))
+        self.judge_lines[line_number].angle.cut(seconds, math.radians(degree))
 
     def _ca(self, line_number: int, beats: float, opacity: float) -> None:
         # ignore opacity setting event
@@ -176,7 +176,7 @@ class PecChart(Chart):
         # motion event
         seconds_start = self._beats_to_seconds(start_beats)
         seconds_end = self._beats_to_seconds(end_beats)
-        self.lines[line_number].position.embed(
+        self.judge_lines[line_number].position.embed(
             seconds_start, seconds_end, complex(x, self.screen_height - y), RPE_EASING_FUNCS[easing_type]
         )
 
@@ -184,7 +184,7 @@ class PecChart(Chart):
         # rotate event
         seconds_start = self._beats_to_seconds(start_beats)
         seconds_end = self._beats_to_seconds(end_beats)
-        line = self.lines[line_number]
+        line = self.judge_lines[line_number]
         line.angle.embed(seconds_start, seconds_end, math.radians(end), RPE_EASING_FUNCS[easing_type])
 
     def _cf(self, line_number: int, start_beats: float, end_beats: float, end: float) -> None:
@@ -210,8 +210,8 @@ if __name__ == '__main__':
                 running = False
 
         screen.fill('black')
-        pos = pec.judge_lines[0].position[seconds] / 2
-        angle = cmath.exp(pec.judge_lines[0].angle[seconds] * 1j)
+        pos = pec.lines[0].position[seconds] / 2
+        angle = cmath.exp(pec.lines[0].angle[seconds] * 1j)
         left = pos + angle * 3500
         right = pos - angle * 3500
         print(seconds)

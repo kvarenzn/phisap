@@ -1,4 +1,4 @@
-from typing import NamedTuple, TypeVar, Generic, Protocol, runtime_checkable
+from typing import NamedTuple, TypeVar, Generic, Protocol, runtime_checkable, Callable
 from abc import ABCMeta, abstractmethod
 import bisect
 import math
@@ -162,19 +162,23 @@ class LivingBamboo(Bamboo[T]):
 class TwinBamboo(Bamboo[complex]):
     xs: Bamboo[float]
     ys: Bamboo[float]
+    convert: Callable[[complex], complex] | None
 
-    def __init__(self, xs: Bamboo[float], ys: Bamboo[float]) -> None:
+    def __init__(self, xs: Bamboo[float], ys: Bamboo[float], convert: Callable[[complex], complex] | None = None) -> None:
         super().__init__()
         self.xs = xs
         self.ys = ys
+        self.convert = convert
     
     def __getitem__(self, time: float) -> complex:
+        if self.convert:
+            return self.convert(complex(self.xs[time], self.ys[time]))
         return complex(self.xs[time], self.ys[time])
 
     def __repr__(self) -> str:
         return f'TwinBamboo(xs={self.xs}, ys={self.ys})'
 
-class Grove(Bamboo[T]):
+class BambooGrove(Bamboo[T]):
     bamboos: list[Bamboo[T]]
     zero: T
 
@@ -190,7 +194,7 @@ class Grove(Bamboo[T]):
         return s
     
     def __repr__(self) -> str:
-        return f'Grove(of {len(self.bamboos)} bamboos)'
+        return f'BambooGrove(of {len(self.bamboos)} bamboos)'
 
 class BambooShoot(Bamboo[T]):
     const: T

@@ -207,7 +207,7 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, defaultdict[int, 
     frames = Frames(screen)
 
     # 统计frames
-    for line in track(chart.judge_lines, description='统计操作帧...', console=console):
+    for line in track(chart.lines, description='统计操作帧...', console=console):
         for note in line.notes:
             ms = round(note.seconds * 1000)
             angle = cmath.exp(line.angle[note.seconds] * 1j)

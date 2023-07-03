@@ -3,7 +3,7 @@ import math
 import cmath
 
 from basis import Note, NoteType, JudgeLine, Chart, Position
-from bamboo import TwinBamboo, LivingBamboo, Grove, Bamboo, BambooShoot, _Interpable
+from bamboo import TwinBamboo, LivingBamboo, BambooGrove, Bamboo, BambooShoot, _Interpable
 from easing import EasingFunction, EASING_FUNCTIONS, easing_with_range, cubic_rev_bezier, LVALUE
 
 RPE_EASING_FUNCS: list[EasingFunction] = [
@@ -180,7 +180,9 @@ class RpeJudgeLine(JudgeLine):
             self.y_control.cut(event['x'], event['y'], RPE_EASING_FUNCS[event['easing']])
 
         def get_easing(event: RpeEventDict) -> EasingFunction:
-            if event['bezier'] == 0:
+            if 'bezier' in event and event['bezier'] != 0:
+                return cubic_rev_bezier(*event['bezierPoints'])
+            else:
                 # not bezier
                 easing_type = event['easingType']
                 easing_func: EasingFunction
@@ -194,8 +196,6 @@ class RpeJudgeLine(JudgeLine):
                     return easing_func
                 else:
                     return easing_with_range(easing_func, event['easingLeft'], event['easingRight'])
-            else:
-                return cubic_rev_bezier(*event['bezierPoints'])
         
         def convert_events(events: list[RpeEventDict], convert: Callable[[float], float] | None = None) -> Bamboo[float]:
             b = LivingBamboo[float]()
@@ -218,11 +218,11 @@ class RpeJudgeLine(JudgeLine):
             if 'moveXEvents' in layers:
                 xss.append(convert_events(layers['moveXEvents']))
             if 'moveYEvents' in layers:
-                yss.append(convert_events(layers['moveYEvents'], lambda y: self.chart.screen_height - y))
+                yss.append(convert_events(layers['moveYEvents'], lambda y: -y))
             if 'rotateEvents' in layers:
-                alphas.append(convert_events(layers['rotateEvents']))
-        self.position = TwinBamboo(Grove(xss, 0), Grove(yss, 0))
-        self.angle = Grove(alphas, 0)
+                alphas.append(convert_events(layers['rotateEvents'], math.radians))
+        self.position = TwinBamboo(BambooGrove(xss, 0), BambooGrove(yss, 0), lambda pos: pos + complex(self.chart.screen_width, self.chart.screen_height) / 2)
+        self.angle = BambooGrove(alphas, 0)
 
         extended_dict = dic['extended']
 
@@ -236,7 +236,7 @@ class RpeJudgeLine(JudgeLine):
                 continue
             note_type = RPE_NOTE_TYPES[note['type']]
             start_time = self.chart._beats_to_seconds(RpeBeats(*note['startTime']).beats())
-            end_time = self.chart._beats_to_seconds(RpeBeats(*note['startTime']).beats())
+            end_time = self.chart._beats_to_seconds(RpeBeats(*note['endTime']).beats())
             self.notes.append(Note(note_type, start_time, end_time - start_time, complex(note['positionX'], note['yOffset'] * note['speed'])))
     
     def pos(self, seconds: float, offset: Position) -> Position:
@@ -270,11 +270,11 @@ class RpeChart(Chart):
             seconds_passed += (beats - beats_passed) / last_bps
             self.bpss.append(RpeBpsInfo(seconds_passed, beats, bps))
         
-        self.judge_lines = []
+        self.lines = []
         for line in dic['judgeLineList']:
             if 'notes' not in line:
                 continue
-            self.judge_lines.append(RpeJudgeLine(line, self))
+            self.lines.append(RpeJudgeLine(line, self))
 
     def _beats_to_seconds(self, beats: float) -> float:
         # 跟pec.py的函数完全一样
@@ -286,4 +286,28 @@ class RpeChart(Chart):
 if __name__ == '__main__':
     # tests
     import json
-    chart = RpeChart(json.load(open('../../test/phira/1000/AT15.json')))
+    rpe = RpeChart(json.load(open('../../test/phira/1000/AT15.json')))
+    import pygame
+
+    pygame.init()
+    screen = pygame.display.set_mode((1350, 900))
+    clock = pygame.time.Clock()
+    running = True
+
+    seconds = 0
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        screen.fill('black')
+        pos = rpe.lines[0].position[seconds]
+        angle = cmath.exp(rpe.lines[0].angle[seconds] * 1j)
+        left = pos + angle * 3500
+        right = pos - angle * 3500
+        pygame.draw.circle(screen, 'white', (pos.real, pos.imag), 10)
+        pygame.draw.line(screen, 'white', (left.real, left.imag), (right.real, right.imag), 4)
+        pygame.display.flip()
+        seconds += clock.tick(60) / 1000
+    pygame.quit()

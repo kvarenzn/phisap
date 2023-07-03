@@ -162,7 +162,7 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
     console.print('开始规划')
 
     # 统计frames
-    for line in track(chart.judge_lines, description='正在统计帧...', console=console):
+    for line in track(chart.lines, description='正在统计帧...', console=console):
         for note in line.notes:
             ms = round(note.seconds * 1000)
             line_pos = line.position[note.seconds]

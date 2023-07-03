@@ -41,4 +41,4 @@ class Chart(metaclass=ABCMeta):
     screen_width: int
     screen_height: int
     offset: float
-    judge_lines: list[JudgeLine]
+    lines: list[JudgeLine]

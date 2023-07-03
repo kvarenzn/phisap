@@ -20,7 +20,7 @@ from cache_manager import CacheManager
 from rich.console import Console
 from rich.progress import track
 
-PHISAP_VERSION = '0.4'
+PHISAP_VERSION = '0.5'
 
 
 def extract_apk(console: Console) -> None:
