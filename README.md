@@ -174,6 +174,16 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 - easing：`b`、`s`、`si`、`so`、`sisi`、`soso`、`siso`和`sosi`
 - 其余**均不支持**，尤其是对 camera 的操作
 
+## 对社区自制谱/类 Phigros 社区音游的支持
+
+目前支持的谱面格式除了 phigros 的官谱格式(json)外，也部分支持 pec 格式和 rpe 格式的社区自制谱
+
+只需要切换到“加载客制谱面”标签页，点击“选择”按钮，然后选择谱面文件即可
+
+类 Phigros 音游目前经过测试的只有 phira，其他的支持情况尚不明确
+
+请注意：对 pec 和 rpe 的支持目前正在开发，处于初期阶段，实际体验可能并不理想。如果你发现了 phisap 不支持的谱面，可以开一个 issue，并附上必要信息
+
 ## 致谢
 
 - `control.py`中的大部分代码参考自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 。
