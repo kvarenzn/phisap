@@ -102,7 +102,7 @@ class PgrJudgeLine(JudgeLine):
 
 class PgrChart(Chart):
     offset: float
-    judge_lines: list[PgrJudgeLine]
+    lines: list[PgrJudgeLine]
 
     def __init__(self, dic: PgrChartDict) -> None:
         version = dic['formatVersion']
@@ -113,6 +113,6 @@ class PgrChart(Chart):
             self.screen_width = 16
             self.screen_height = 9
         self.offset = dic['offset']
-        self.judge_lines = [
+        self.lines = [
             PgrJudgeLine(line, version) for line in dic['judgeLineList']
         ]
