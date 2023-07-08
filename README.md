@@ -29,10 +29,10 @@ PHIgros Semi-Automatic Player
 
 ## 免责声明
 
-- 本项目属于个人兴趣项目，与厦门鸽游网络有限公司无关。
-- **本项目内不含任何版权素材，且本项目并非商业项目**。
-- 项目的服务端借用自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)，在此感谢 scrcpy 的作者和维护者们。
-- 截止目前，项目作者从未在任何除 GitHub 以外的平台上以任何方式宣传过本项目。
+- 本项目属于个人兴趣项目，与厦门鸽游网络有限公司无关
+- **本项目内不含任何版权素材，且本项目并非商业项目**
+- 项目的服务端借用自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)，在此感谢 scrcpy 的作者和维护者们
+- 截止目前，项目作者从未在任何除 GitHub 以外的平台上以任何方式宣传过本项目
 
 ## 灵感来源
 
@@ -74,7 +74,7 @@ PHIgros Semi-Automatic Player
      - 大小约为 1.3GB
      - 使用`adb pull`或者文件管理器直接复制出来即可
    - 当然，如果你不想手动提取，也可以直接去网上下载一个 phigros 的安装包或数据包，注意版本对应即可
-4. 准备服务端。请去[scrcpy 的 releases 页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v2.0`，不要下载成别的版本。下载完成后，请将文件直接放置在 phisap 的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则 phisap 将无法识别。
+4. 准备服务端。请去[scrcpy 的 releases 页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v2.0`，不要下载成别的版本。下载完成后，请将文件直接放置在 phisap 的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则 phisap 将无法识别
    - 如果你使用\*nix 系统，且安装有 wget，那么下面的命令与上面描述的操作等效:
      ```bash
      cd phisap  # 定位到phisap的根目录下
@@ -186,8 +186,8 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 
 ## 致谢
 
-- `control.py`中的大部分代码参考自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 。
-- `catalog.py`和`extract.py`中的代码参考自[Perfare/AssetStudio](https://github.com/Perfare/AssetStudio) 。
+- `control.py`中的大部分代码参考自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)
+- `catalog.py`和`extract.py`中的代码参考自[Perfare/AssetStudio](https://github.com/Perfare/AssetStudio)
 
 感谢上述优秀的项目和创造或维护它们的个人或企业。
 
@@ -195,9 +195,21 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 
 除部分有参考来源的代码按其作者要求的方式开源外，**其余代码按照`WTFPL`许可开源。**
 
-预告：将来可能会有一个大更新，其特征为更换现有的 UI 库`tkinter`为其他库，届时将变更开源许可为`GPLv3`。如果你有`GPL`协议洁癖，请做好心理准备
+<del>预告：将来可能会有一个大更新，其特征为更换现有的 UI 库 tkinter 为其他库，届时将变更开源许可为 GPLv3。如果你有 GPL 协议洁癖，请做好心理准备</del>
+
+不动了，GPLv3 协议太麻烦，还是 WTFPL 好
 
 ## 更新日志
+
+### (2023/07/08) v0.6
+
+- 替换 GUI 库为 PyQt5
+  - 为什么不是 PySide？因为我的开发机的系统里装了 PyQt5 但没装 PySide
+  - **注意：需要安装新依赖`pip install -r requirements.txt --upgrade`**
+- 加入英文界面
+- 保持开源许可为`WTFPL`
+- 加入对宽高比4:3的设备的支持
+- 修复解析 pec 和 rpe 谱面时遇到的一些问题
 
 ### (2023/07/03) v0.5
 
@@ -218,7 +230,7 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
   - 尚未确定时间标签相近的事件的处理办法，目前是后者会覆盖前者
     - 尚未确定“相近”的定义，一些谱面可能差几毫秒算“相近”，另一些则必须精确到`1e-12`
 
-- 现在 phisap 将不再完全通过文件后缀名判断谱面格式
+- 现在 phisap 将不再只通过文件后缀名判断谱面格式
   - 因为一些 pec 格式的谱面的后缀名也是 json，虽然里面的内容跟 json 八竿子打不着
   - 如果文件的后缀名是 pec，则假定该文件为 pec 格式的谱面
 

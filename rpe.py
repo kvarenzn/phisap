@@ -170,14 +170,17 @@ class RpeJudgeLine(JudgeLine):
 
         # control events
         self.pos_control = LivingBamboo[float]()
-        for event in dic['posControl']:
-            self.pos_control.cut(event['x'], event['pos'], RPE_EASING_FUNCS[event['easing']])
+        if 'posControl' in dic:
+            for event in dic['posControl']:
+                self.pos_control.cut(event['x'], event['pos'], RPE_EASING_FUNCS[event['easing']])
         self.skew_control = LivingBamboo[float]()
-        for event in dic['skewControl']:
-            self.skew_control.cut(event['x'], event['skew'], RPE_EASING_FUNCS[event['easing']])
+        if 'skewControl' in dic:
+            for event in dic['skewControl']:
+                self.skew_control.cut(event['x'], event['skew'], RPE_EASING_FUNCS[event['easing']])
         self.y_control = LivingBamboo[float]()
-        for event in dic['yControl']:
-            self.y_control.cut(event['x'], event['y'], RPE_EASING_FUNCS[event['easing']])
+        if 'yControl' in dic:
+            for event in dic['yControl']:
+                self.y_control.cut(event['x'], event['y'], RPE_EASING_FUNCS[event['easing']])
 
         def get_easing(event: RpeEventDict) -> EasingFunction:
             if 'bezier' in event and event['bezier'] != 0:

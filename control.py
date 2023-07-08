@@ -13,7 +13,9 @@ from algo.algo_base import TouchAction
 
 class DeviceController:
     serial: str | None
+    port: int
     session_id: str
+    skt: socket.socket
     video_socket: socket.socket
     control_socket: socket.socket
     server_process: subprocess.Popen
@@ -23,8 +25,11 @@ class DeviceController:
     device_height: int
     collector_running: bool
 
-    def __init__(self, serial: str | None = None, port: int = 27188, push_server: bool = True, server_dir: str = '.') -> None:
+    def __init__(
+        self, serial: str | None = None, port: int = 27188, push_server: bool = True, server_dir: str = '.'
+    ) -> None:
         self.serial = serial
+        self.port = port
         adb = ('adb',) if serial is None else ('adb', '-s', serial)
         self.session_id = format(random.randint(0, 0x7FFFFFFF), '08x')
         server_file = next(filter(lambda p: p.startswith('scrcpy-server-v'), os.listdir(server_dir)))
@@ -32,11 +37,19 @@ class DeviceController:
         server_version = server_file.split('v')[-1]
         if push_server:
             subprocess.run([*adb, 'push', server_file, '/data/local/tmp/scrcpy-server.jar'])
-        subprocess.run([*adb, 'reverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{port}'])
-        skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        skt.bind(('localhost', port))
-        skt.listen(1)
+        self.skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        self.skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        while True:
+            try:
+                self.skt.bind(('localhost', self.port))
+                break
+            except OSError as e:
+                if e.errno == 98:  # Address already in use
+                    self.port += 1
+                else:
+                    raise e
+        self.skt.listen(1)
+        subprocess.run([*adb, 'reverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{self.port}'])
         command_line = [
             *adb,
             'shell',
@@ -53,8 +66,8 @@ class DeviceController:
         self.server_process = subprocess.Popen(command_line)
         # 由于我们指定了audio=false，所以这只有两个socket
         # 其实本来audio streaming可以用于对齐时钟，不过可惜只支持Android 11及以上
-        self.video_socket, _ = skt.accept()
-        self.control_socket, _ = skt.accept()
+        self.video_socket, _ = self.skt.accept()
+        self.control_socket, _ = self.skt.accept()
         subprocess.run(
             [*adb, 'reverse', '--remove', f'localabstract:scrcpy_{self.session_id}']
         )  # 移除创建的adb tunnel，我们不再需要它了
@@ -73,7 +86,10 @@ class DeviceController:
                         frames = codec.decode(packet)
                         for frame in frames:
                             if self.device_width != frame.width or self.device_height != frame.height:
-                                print('[client]', f'device_size: {self.device_width}x{self.device_height} -> {frame.width}x{frame.height}')
+                                print(
+                                    '[client]',
+                                    f'device_size: {self.device_width}x{self.device_height} -> {frame.width}x{frame.height}',
+                                )
                                 self.device_width = frame.width
                                 self.device_height = frame.height
                             break
@@ -131,6 +147,14 @@ class DeviceController:
         self.touch(x, y, TouchAction.DOWN, pointer_id)
         time.sleep(delay)
         self.touch(x, y, TouchAction.UP, pointer_id)
+
+    def clean(self) -> None:
+        self.collector_running = False
+        self.server_process.kill()
+        self.video_socket.close()
+        self.control_socket.close()
+        self.skt.close()
+
 
     @staticmethod
     def get_devices() -> list[str]:

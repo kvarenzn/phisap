@@ -850,19 +850,5 @@ class AssetsManager:
             self.asset_files.append(asset_file)
             self.asset_file_hashes.append(asset_file.path.name)
 
-    def read_assets(self, console: Console | None = None):
-        files = self.asset_files
-        if console:
-            from rich.progress import track
-
-            files = track(files, description='正在解析文件...', console=console)
-
-        for asset_file in files:
-            for object_info in asset_file.object_infos:
-                with ObjectReader(asset_file.reader, asset_file, object_info) as obj_reader:
-                    if obj_reader.class_id == ClassID.TEXT_ASSET:
-                        asset_file.add_object(TextAsset(obj_reader))
-
-
 if __name__ == '__main__':
     pass
