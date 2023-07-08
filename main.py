@@ -43,10 +43,12 @@ PHISAP_VERSION = '0.7'
 
 
 class ExtractPackageWorker(QThread):
-    processUpdate: pyqtSignal
+    processUpdate = pyqtSignal(int, int, int)  # phase, current, max
     packagePath: str
+    running: bool
 
     def run(self) -> None:
+        self.running = True
         package = zipfile.ZipFile(self.packagePath)
         try:
             catalog = Catalog(package.open('assets/aa/catalog.json'))
@@ -57,36 +59,29 @@ class ExtractPackageWorker(QThread):
 
         manager = AssetsManager()
         files = package.namelist()
-        dialog = QProgressDialog(self.tr('Loading...'), self.tr('Cancel'), 0, len(files))
-        dialog.setWindowModality(Qt.WindowModality.WindowModal)
         for index, file in enumerate(files):
-            dialog.setValue(index)
-            if dialog.wasCanceled():
+            self.processUpdate.emit(0, index, len(files))
+            if not self.running:
                 return
             if not file.startswith('assets/aa/Android'):
                 continue
             with package.open(file) as f:
                 manager.load_file(f)
-        dialog.setValue(len(files))
 
         files = manager.asset_files
-        dialog = QProgressDialog(self.tr('Processing...'), self.tr('Cancel'), 0, len(files))
-        dialog.setWindowModality(Qt.WindowModality.WindowModal)
         for index, file in enumerate(files):
-            dialog.setValue(index)
-            if dialog.wasCanceled():
+            self.processUpdate.emit(1, index, len(files))
+            if not self.running:
                 return
             for object_info in file.object_infos:
                 with ObjectReader(file.reader, file, object_info) as obj_reader:
                     if obj_reader.class_id == ClassID.TEXT_ASSET:
                         file.add_object(TextAsset(obj_reader))
-        dialog.setValue(len(files))
 
-        dialog = QProgressDialog(self.tr('Extracting...'), self.tr('Cancel'), 0, len(manager.asset_files))
-        dialog.setWindowModality(Qt.WindowModality.WindowModal)
-        for index, file in enumerate(manager.asset_files):
-            dialog.setValue(index)
-            if dialog.wasCanceled():
+        files = manager.asset_files
+        for index, file in enumerate(files):
+            self.processUpdate.emit(2, index, len(files))
+            if not self.running:
                 return
             assert file.parent
             filepath = file.parent.reader.path
@@ -103,12 +98,13 @@ class ExtractPackageWorker(QThread):
                 if isinstance(obj, TextAsset):
                     with open(asset_name, 'w') as out:
                         out.write(obj.text)
-        dialog.setValue(len(manager.asset_files))
+    
+    def cancel(self) -> None:
+        self.running = False
 
-    def __init__(self, packagePath: str, parent: QObject | None = None) -> None:
+    def __init__(self, packagePath: str, parent: QObject) -> None:
         super().__init__(parent)
         self.packagePath = packagePath
-        self.processUpdate = pyqtSignal(int)
 
 
 class AutoplayWorker(QThread):
@@ -161,6 +157,8 @@ class MainWindow(QWidget):
     controller: DeviceController | None
     running: bool
     autoplayWorker: AutoplayWorker | None
+    extractPackageWorker: ExtractPackageWorker | None
+    extractProgressDialog: QProgressDialog | None
 
     mainLayout: QLayout
     deviceSerialSelector: QComboBox
@@ -192,6 +190,8 @@ class MainWindow(QWidget):
         self.extractedCharts = Path('./Assets/Tracks')
         self.cacheManager = CacheManager()
         self.autoplayWorker = None
+        self.extractPackageWorker = None
+        self.extractProgressDialog = None
         self.controller = None
 
         self.setMinimumWidth(300)
@@ -364,15 +364,31 @@ class MainWindow(QWidget):
         if not sel:
             return
         self.extractButton.setDisabled(True)
-        worker = ExtractPackageWorker(filepath, self)
-        worker.finished.connect(self.onExtractFinished)
-        worker.start()
+        self.extractPackageWorker = ExtractPackageWorker(filepath, self)
+        self.extractProgressDialog = QProgressDialog(self)
+        self.extractProgressDialog.canceled.connect(self.extractPackageWorker.cancel)
+        self.extractPackageWorker.finished.connect(self.onExtractFinished)
+        self.extractPackageWorker.processUpdate.connect(self.onExtractProgressUpdated)
+        self.extractPackageWorker.start()
+
+    def onExtractProgressUpdated(self, phase: int, current: int, maxValue: int) -> None:
+        if self.extractProgressDialog is None:
+            return
+        
+        hint = [self.tr('Loading...'), self.tr('Processing...'), self.tr('Extracting...')]
+        self.extractProgressDialog.setLabelText(hint[phase])
+        self.extractProgressDialog.setMaximum(maxValue)
+        self.extractProgressDialog.setValue(current)
 
     def onExtractFinished(self):
+        if self.extractProgressDialog:
+            self.extractProgressDialog.close()
+            self.extractProgressDialog = None
         self.extractButton.setDisabled(False)
         box = QMessageBox()
         box.setText(self.tr('Extract finished'))
         box.exec()
+        self.loadSongs()
 
     def loadSongs(self) -> None:
         try:
