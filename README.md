@@ -5,7 +5,7 @@ PHIgros Semi-Automatic Player
 
 适用于音游 Phigros 的半自动打歌器，仅支持安卓设备
 
-![最高支持](https://img.shields.io/badge/最高支持-Phigros%203.1.0-blue.svg)
+![最高支持](https://img.shields.io/badge/最高支持-Phigros%203.1.1.1-blue.svg)
 
 </div>
 
@@ -39,6 +39,7 @@ PHIgros Semi-Automatic Player
 > Tip: sudo 板子自己打歌
 
 ## 程序界面
+
 ![Phisap截图](./screenshots/phisap.png)
 
 ## 成果展示
@@ -57,11 +58,10 @@ PHIgros Semi-Automatic Player
 ### 准备
 
 0. **请安装 Python 3.11**
-   - 请使用正式版，不要使用开发者预览(early developer preview)版
-     - 如果你非要用，请使用`3.11.0a5`及以后的版本，否则你可能会遇到一些问题，见 issue#71
+   - 请使用正式版，**不要使用开发者预览(early developer preview)版**
 1. 使用`pip install -r requirements.txt`安装依赖
 2. 请安装`Android Debug Bridge`，**要求版本号至少为`1.0.41`**，并确保相应的环境变量已经配置好。
-3. 请准备 Phigros 的游戏安装包/通用数据包。目前支持的游戏版本为 2.0.0 至 3.1.0
+3. 请准备 Phigros 的游戏安装包/通用数据包。目前支持的游戏版本为 2.0.0 至 3.1.1.1
    - 如果你的 phigros 是 taptap 版，那么只需要游戏安装包即可
      - 如果你使用\*nix 系统(如 Linux 或 Mac OS)，则你可以使用如下的`bash shell`命令从安卓设备上提取安装包
        ```bash
@@ -103,7 +103,7 @@ python main.py
 
 - 虽然 phisap 的灵感来源为`sudo 板子自己打歌 `，不过**本程序并不依赖 root 权限工作**
 - 一些情况下有可能因误触发三指截屏或通知中心而导致 miss，不是每台设备都会触发，视厂商和设备型号而定
-- **phisap 当前完美支持的最高版本为 3.1.0**，所有的曲目/任意难度均可以打出金 φ，除了一些特殊类型的谱面（不用担心，不会影响 rks）。这些谱面详见[暂不支持的谱面](#暂不支持的谱面)。不过，在使用 phisap 时可能会发现一些谱面无法 AP，那么这时你需要
+- **phisap 当前完美支持的最高版本为 3.1.1.1**，所有的曲目/任意难度均可以 AP，除了一些特殊类型的谱面（不用担心，不会影响 rks）。这些谱面详见[暂不支持的谱面](#暂不支持的谱面)。不过，在使用 phisap 时可能会发现一些谱面无法 AP，那么这时你需要
   - 确保计时器同步的精确程度满足要求，如果你发现 phisap 打出了 FULL COMBO，但并没有 AP，这**一定**说明你的计时器同步没有做好
   - 如果计时器同步没有问题，那么你可以试试换一个规划算法。目前一些谱面只能由 algo1 达成 AP，而另一些只能由 algo2 达成，当然，大部分的谱面使用 algo1 和 algo2 都可以完成
   - 如果你发现还是不行，那么你可以考虑开一个 issue，跟我说明这个问题
@@ -204,7 +204,12 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 
 ## 更新日志
 
+### (2023/07/08) v0.8
+
+- Pgr 3.1.1.1
+
 ### (2023/07/08) v0.7
+
 - 自动加载/保存设置
   - 配置文件由原来的`cache`更改为`.settings.ini`
 - 微调布局
@@ -216,7 +221,7 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
   - **注意：需要安装新依赖`pip install -r requirements.txt --upgrade`**
 - 加入英文界面
 - 保持开源许可为`WTFPL`
-- 加入对宽高比4:3的设备的支持
+- 加入对宽高比 4:3 的设备的支持
 - 修复解析 pec 和 rpe 谱面时遇到的一些问题
 
 ### (2023/07/03) v0.5
