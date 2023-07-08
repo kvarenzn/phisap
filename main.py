@@ -6,7 +6,6 @@ import zipfile
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QApplication,
-    QMainWindow,
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
@@ -24,7 +23,7 @@ from PyQt5.QtWidgets import (
     QProgressDialog,
     QMessageBox,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings
 
 from rich.console import Console
 
@@ -40,7 +39,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.6'
+PHISAP_VERSION = '0.7'
 
 
 class ExtractPackageWorker(QThread):
@@ -185,6 +184,8 @@ class MainWindow(QWidget):
     testButton: QPushButton
     lastDelayValue: int
 
+    settings: QSettings
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.console = Console()
@@ -218,11 +219,11 @@ class MainWindow(QWidget):
         self.songIdSelector = QComboBox()
         self.extractButton = QPushButton(text=self.tr('Extract'))
         self.extractButton.clicked.connect(self.extractPackage)
+        selectExtractedViewLayout.addWidget(self.extractButton)
         line1 = QHBoxLayout()
         selectExtractedViewLayout.addLayout(line1)
         line1.addWidget(QLabel(text=self.tr('Song:')))
         line1.addWidget(self.songIdSelector)
-        line1.addWidget(self.extractButton)
         line2 = QHBoxLayout()
         selectExtractedViewLayout.addLayout(line2)
         self.difficultySelector = QComboBox()
@@ -317,6 +318,37 @@ class MainWindow(QWidget):
         self.loadSongs()
         self.refreshDevices()
 
+        self.settings = QSettings('./.settings.ini', QSettings.Format.IniFormat)
+        self.loadSettings()
+
+    def loadSettings(self) -> None:
+        if self.songIdSelector.count() > 1:
+            self.songIdSelector.setCurrentText(self.settings.value('songId', self.songIdSelector.currentText(), str))
+        if self.difficultySelector.count() > 1:
+            self.difficultySelector.setCurrentText(
+                self.settings.value('difficulty', self.difficultySelector.currentText(), str)
+            )
+        self.algorithmSelector.button(self.settings.value('algorithm', 0, int)).setChecked(True)
+        self.customChartPath.setText(self.settings.value('customChartPath', '', str))
+        self.preferCache.setChecked(self.settings.value('preferCache', True, bool))
+        self.syncModeSelector.button(self.settings.value('syncMode', 0, int)).setChecked(True)
+        self.delayInput.setValue(self.settings.value('delay', 0, int))
+        self.aspectRatioSelector.button(self.settings.value('aspectRatio', 0, int)).setChecked(True)
+        self.saveResult.setChecked(self.settings.value('saveCache', False, bool))
+
+    def saveSettings(self) -> None:
+        if self.songIdSelector.count() > 1:
+            self.settings.setValue('songId', self.songIdSelector.currentText())
+        if self.difficultySelector.count() > 1:
+            self.settings.setValue('difficulty', self.difficultySelector.currentText())
+        self.settings.setValue('algorithm', self.algorithmSelector.checkedId())
+        self.settings.setValue('customChartPath', self.customChartPath.text())
+        self.settings.setValue('preferCache', self.preferCache.isChecked())
+        self.settings.setValue('syncMode', self.syncModeSelector.checkedId())
+        self.settings.setValue('delay', self.delayInput.value())
+        self.settings.setValue('aspectRatio', self.aspectRatioSelector.checkedId())
+        self.settings.setValue('saveCache', self.saveResult.isChecked())
+
     def askCustomChart(self) -> None:
         filepath, sel = QFileDialog.getOpenFileName(
             self, self.tr('Choose custom chart file'), '.', self.tr('JSON Charts (*.json);;PEC Charts (*.pec)')
@@ -406,6 +438,7 @@ class MainWindow(QWidget):
         return content, chart
 
     def process(self) -> None:
+        self.saveSettings()
         self.testButton.setDisabled(True)
         try:
             algoIndex = self.algorithmSelector.checkedId()
@@ -441,7 +474,7 @@ class MainWindow(QWidget):
                     self.mainModeSelectTabs.insertTab(0, self.autoplayView, self.tr('Autoplay'))
         except Exception:
             pass
-    
+
     def onSelectedDeviceChanged(self, serial: str) -> None:
         if not serial:
             return
@@ -451,16 +484,19 @@ class MainWindow(QWidget):
 
         if serial == self.tr('No device found'):
             return
-        
+
         self.controller = DeviceController(serial)
-        
 
     def autoplay(self) -> None:
+        self.saveSettings()
         content, chart = self.loadChart()
         algoIndex = self.algorithmSelector.checkedId()
         ans: dict
         screen: ScreenUtil
         ansJson: str | None = None
+
+        if self.preferCache.isChecked():
+            ansJson = self.cacheManager.find_cache_for_content(content)
 
         if ansJson is not None:
             screen, ans = load_from_json(ansJson)
