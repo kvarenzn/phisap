@@ -38,6 +38,9 @@ PHIgros Semi-Automatic Player
 
 > Tip: sudo 板子自己打歌
 
+## 程序界面
+![Phisap截图](./screenshots/phisap.png)
+
 ## 成果展示
 
 <details>
