@@ -39,7 +39,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.7'
+PHISAP_VERSION = '0.8'
 
 
 class ExtractPackageWorker(QThread):
@@ -90,12 +90,12 @@ class ExtractPackageWorker(QThread):
             asset_name = catalog.fname_map[filepath.name]
             if not asset_name.startswith('Assets/'):
                 continue
-            basedir = os.path.dirname(asset_name)
-            if basedir and not os.path.exists(basedir):
-                os.makedirs(basedir)
-
+            
             for obj in file.objects:
                 if isinstance(obj, TextAsset):
+                    basedir = os.path.dirname(asset_name)
+                    if basedir and not os.path.exists(basedir):
+                        os.makedirs(basedir)
                     with open(asset_name, 'w') as out:
                         out.write(obj.text)
     
@@ -392,6 +392,8 @@ class MainWindow(QWidget):
 
     def loadSongs(self) -> None:
         try:
+            if not self.extractedCharts.exists() or not self.extractedCharts.is_dir():
+                return
             for folderPath in sorted(self.extractedCharts.iterdir()):
                 folder = folderPath.name
                 if folder.startswith('#'):
@@ -439,7 +441,7 @@ class MainWindow(QWidget):
 
     def loadChart(self) -> tuple[str, Chart]:
         selection, chartPath = self.getSelectedPath()
-        content = chartPath.open().read()
+        content = chartPath.open(encoding='utf-8').read()
         chart: Chart
         if selection == 0:
             chart = PgrChart(json.loads(content))
