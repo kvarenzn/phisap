@@ -39,7 +39,7 @@ class Bamboo(Generic[T], metaclass=ABCMeta):
 
 
 def equal(a: float, b: float) -> float:
-    return math.isclose(a, b, rel_tol=0.000000000000000001)
+    return math.isclose(a, b)
 
 
 class Segment(NamedTuple, Generic[T]):
@@ -159,17 +159,20 @@ class LivingBamboo(Bamboo[T]):
             return f'''LivingBamboo(min={self.joints[0].timestamp}, max={self.joints[-1].timestamp}, total_joints={len(self.joints)})'''
         return 'LivingBamboo(empty)'
 
+
 class TwinBamboo(Bamboo[complex]):
     xs: Bamboo[float]
     ys: Bamboo[float]
     convert: Callable[[complex], complex] | None
 
-    def __init__(self, xs: Bamboo[float], ys: Bamboo[float], convert: Callable[[complex], complex] | None = None) -> None:
+    def __init__(
+        self, xs: Bamboo[float], ys: Bamboo[float], convert: Callable[[complex], complex] | None = None
+    ) -> None:
         super().__init__()
         self.xs = xs
         self.ys = ys
         self.convert = convert
-    
+
     def __getitem__(self, time: float) -> complex:
         if self.convert:
             return self.convert(complex(self.xs[time], self.ys[time]))
@@ -177,6 +180,7 @@ class TwinBamboo(Bamboo[complex]):
 
     def __repr__(self) -> str:
         return f'TwinBamboo(xs={self.xs}, ys={self.ys})'
+
 
 class BambooGrove(Bamboo[T]):
     bamboos: list[Bamboo[T]]
@@ -186,24 +190,23 @@ class BambooGrove(Bamboo[T]):
         super().__init__()
         self.bamboos = bamboos
         self.zero = zero
-    
+
     def __getitem__(self, time: float) -> T:
-        s = self.zero
-        for bamboo in self.bamboos:
-            s += bamboo[time]
-        return s
-    
+        return sum((b[time] for b in self.bamboos), self.zero)
+
     def __repr__(self) -> str:
         return f'BambooGrove(of {len(self.bamboos)} bamboos)'
 
+
 class BambooShoot(Bamboo[T]):
     const: T
+
     def __init__(self, const: T) -> None:
         super().__init__()
         self.const = const
-    
+
     def __getitem__(self, time: float) -> T:
         return self.const
-    
+
     def __repr__(self) -> str:
         return f'BambooShoot({self.const})'
