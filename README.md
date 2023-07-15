@@ -1,9 +1,11 @@
 <div align="center">
 <h1 align="center">phisap</h1>
 
-PHIgros Semi-Automatic Player
+PHIgros(-like) Semi-Automatic Player
 
-适用于音游 Phigros 的半自动打歌器，仅支持安卓设备
+适用于(类)Phigros 的半自动打歌器
+
+仅支持安卓设备
 
 ![最高支持](https://img.shields.io/badge/最高支持-Phigros%203.1.1.1-blue.svg)
 
@@ -179,13 +181,33 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 
 ## 对社区自制谱/类 Phigros 社区音游的支持
 
-目前支持的谱面格式除了 phigros 的官谱格式(json)外，也部分支持 pec 格式和 rpe 格式的社区自制谱
+目前支持的谱面格式
 
-只需要切换到“加载客制谱面”标签页，点击“选择”按钮，然后选择谱面文件即可
+- 官谱格式
+  - 后缀为`.json`
+  - 对象的键和值的类型与官谱一致
+- PEC 格式
+  - 后缀为`.pec`或`.json`(极少数情况)
+  - 纯文本文件，以行为单位
+- RPE 格式
+  - 后缀为`.json`
 
-类 Phigros 音游目前经过测试的只有 phira，其他的支持情况尚不明确
+支持情况
 
-请注意：对 pec 和 rpe 的支持目前正在开发，处于初期阶段，实际体验可能并不理想。如果你发现了 phisap 不支持的谱面，可以开一个 issue，并附上必要信息
+- 官谱
+  - 完全支持
+- PEC 格式
+  - 支持所有指令
+  - 暂不能很好处理事件之间相互重叠的情况
+    - 例如：
+      - 事件一：起始于时间 A，终止于时间 C
+      - 事件二：起始于时间 B，终止于时间 D
+      - A < B < C < D
+- RPE 格式
+  - 忽略 ID 为 30 以上的 easingType
+  - 忽略`posControl`、`skewControl`、`yControl`以及所有的`extendedEvents`(`inclineEvents`、`scaleXEvents`和`scaleYEvents`)，但可以正确解析它们
+
+请注意：对 pec 和 rpe 的支持目前正在开发中，处于初期阶段，实际体验可能并不理想。如果你发现了 phisap 不支持的谱面，可以开一个 issue，并附上必要信息
 
 ## 致谢
 
