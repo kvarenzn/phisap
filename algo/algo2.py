@@ -93,6 +93,7 @@ FLICK_START = -15
 FLICK_END = 15
 FLICK_DURATION = FLICK_END - FLICK_START
 
+
 class PointerAllocator:
     screen: ScreenUtil
     pointers: list[Pointer]
@@ -219,19 +220,19 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, defaultdict[int, 
                     for offset in range(1, hold_ms + 1):
                         time = (ms + offset) / 1000
                         angle = cmath.exp(line.angle[time] * 1j)
-                        frames[ms + offset].add(
-                            NoteType.DRAG, line.pos(time, note.offset), angle
-                        )
+                        frames[ms + offset].add(NoteType.DRAG, line.pos(time, note.offset), angle)
                 case NoteType.FLICK:
                     if not screen.visible(pos):
                         # 这块的逻辑在algo1.py中有解释
-                        for dt in range(-3, 4):
+                        for dt in range(-10, 10):
                             new_time = note.seconds + dt * line.beat_duration(note.seconds)
                             new_line_pos = line.position[new_time]
                             new_angle = cmath.exp(line.angle[new_time] * 1j)
                             new_note_pos = new_line_pos + angle * note.offset
                             if screen.visible(new_note_pos):
-                                console.print(f'[red]微调判定时间：flick(pos=({(pos.real, pos.imag)}), time={note.seconds}s) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/red]')
+                                console.print(
+                                    f'[red]微调判定时间：flick(pos=({(pos.real, pos.imag)}), time={note.seconds}s) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/red]'
+                                )
                                 angle = new_angle
                                 pos = new_note_pos
                                 break
@@ -246,6 +247,8 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, defaultdict[int, 
 
     for frame in track(frames, description='规划触控事件...'):
         allocator.allocate(frame)
+
+    console.print('规划完毕.')
 
     return screen, allocator.done()
 

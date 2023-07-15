@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .algo_base import TouchAction, VirtualTouchEvent, distance_of, ScreenUtil
+
 from basis import Chart, NoteType, Position, Vector
 
 from rich.console import Console
@@ -46,15 +47,12 @@ class PointerManager:
     delta: int
     now: int
 
-    recycle_scope: float
-
     recycled: set[int]
     unused: dict[int, Pointer]
     unused_now: dict[int, Pointer]
     mark_as_released: list[int]
 
-    def __init__(self, recycle_scope: float, begin: int, delta: int = 1) -> None:
-        self.recycle_scope = recycle_scope
+    def __init__(self, begin: int, delta: int = 1) -> None:
         self.begin = begin
         self.max_pointer_id = begin
         self.pointers = {}
@@ -85,7 +83,7 @@ class PointerManager:
             ptr.pos = event.point
             return ptr.pid, False
         if not new:
-            nearest_distance = self.recycle_scope
+            nearest_distance = float('inf')
             nearest_pid = None
             for pid, ptr in self.unused.items():
                 if (d := distance_of(event.point, ptr.pos)) < nearest_distance:
@@ -144,8 +142,8 @@ class PointerManager:
 def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[VirtualTouchEvent]]]:
     screen = ScreenUtil(chart.screen_width, chart.screen_height)
 
-    flick_start = -30
-    flick_end = 30
+    flick_start = -15
+    flick_end = 15
     flick_duration = flick_end - flick_start
 
     frames: defaultdict[int, list[FrameEvent]] = defaultdict(list)
@@ -158,8 +156,6 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
     def flick_pos(pos: Position, offset: int, rot_vec: Vector) -> Position:
         rate = 1 - 2 * (offset - flick_start) / flick_duration
         return pos - rot_vec.conjugate() * screen.flick_radius * rate
-
-    console.print('开始规划')
 
     # 统计frames
     for line in track(chart.lines, description='正在统计帧...', console=console):
@@ -194,7 +190,7 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
                         # 对于DESTRUCTION 3,2,1，在之后的一个时间戳(26753)，判定点的位置便是(w/2, h/2)
                         # 也就是在屏幕的中心
                         found = False
-                        for dt in range(-10, 10):  # 查找的范围为[event.time - 3, event.time + 3]
+                        for dt in range(-10, 10):  # 查找的范围为[event.time - 10, event.time + 10]
                             new_time = note.seconds + dt * line.beat_duration(note.seconds)
                             new_line_pos = line.position[new_time]
                             new_alpha = line.angle[new_time]
@@ -258,7 +254,7 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
 
     console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
-    pointers = PointerManager((chart.screen_width + chart.screen_height) / 10, 1000)
+    pointers = PointerManager(1000)
 
     result: defaultdict[int, list[VirtualTouchEvent]] = defaultdict(list)
 
@@ -299,3 +295,17 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, dict[int, list[Vi
         add_touch_event(ts, line_pos, TouchAction.UP, pid)
     console.print('规划完毕.')
     return screen, result
+
+__all__ = ['solve']
+
+if __name__ == '__main__':
+    from pgr import PgrChart
+    import json
+    console = Console()
+    chart = PgrChart(json.load(open('../Assets/Tracks/Rrharil.TeamGrimoire.0/Chart_AT.json')))
+    for i in range(100):
+        try:
+            # solve(chart, console, i / 10)
+            print('ok, scope =', i / 10)
+        except RuntimeError:
+            pass

@@ -1,11 +1,8 @@
 # 指针规划算法的基类和一些实用类型、函数
-from typing import Self, IO
+from typing import Self
 from enum import Enum
 from typing import NamedTuple
-import math
-import cmath
 import json
-
 
 from basis import Position, Vector
 
