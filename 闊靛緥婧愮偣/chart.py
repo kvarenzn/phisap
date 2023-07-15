@@ -1,6 +1,8 @@
 from typing import Any, Union
 
-from ..easing import Easing3D
+import sys
+sys.path.append('..')
+from easing import Easing3D
 
 
 class ArcTap:

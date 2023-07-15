@@ -1,7 +1,7 @@
 import numpy as np
 
-from .chart import Chart, Arc, Tap, Hold
-from ..algo.algo_base import TouchAction, TouchEvent
+from chart import Chart, Arc, Tap, Hold
+from algo.algo_base import TouchAction, TouchEvent
 
 
 class CoordConv:

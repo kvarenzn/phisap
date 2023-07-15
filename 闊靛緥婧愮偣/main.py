@@ -1,8 +1,8 @@
 from time import time
 
-from .chart import Chart
+from chart import Chart
 from solve import solve, CoordConv
-from ..control import DeviceController
+from control import DeviceController
 
 if __name__ == '__main__':
     print('请开启游戏，测量并输入下面五个点的屏幕坐标(以"x, y"的格式输入，单位：像素)：')
