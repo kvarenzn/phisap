@@ -89,8 +89,8 @@ def distance_of(note1: PlainNote | None, note2: PlainNote | None) -> float:
     return abs(note2.pos - note1.pos)
 
 
-FLICK_START = -30
-FLICK_END = 30
+FLICK_START = -15
+FLICK_END = 15
 FLICK_DURATION = FLICK_END - FLICK_START
 
 class PointerAllocator:
