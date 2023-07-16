@@ -7,7 +7,6 @@ import cmath
 import math
 
 from basis import Position, Chart, JudgeLine, NoteType, Note
-from easing import EasingFunction, EASING_FUNCTIONS
 from bamboo import LivingBamboo
 from rpe import RPE_EASING_FUNCS
 
@@ -53,8 +52,8 @@ class PecJudgeLine(JudgeLine):
         return 1.875 / 175
 
     def pos(self, seconds: float, offset: Position) -> Position:
-        angle = self.angle[seconds]
-        pos = self.position[seconds]
+        angle = self.angle @ seconds
+        pos = self.position @ seconds
         return pos + cmath.exp(angle * 1j) * offset
 
     def convert_notes(self) -> None:
@@ -210,8 +209,8 @@ if __name__ == '__main__':
                 running = False
 
         screen.fill('black')
-        pos = pec.lines[0].position[seconds] / 2
-        angle = cmath.exp(pec.lines[0].angle[seconds] * 1j)
+        pos = pec.lines[0].position @ seconds / 2
+        angle = cmath.exp(pec.lines[0].angle @ seconds * 1j)
         left = pos + angle * 3500
         right = pos - angle * 3500
         print(seconds)

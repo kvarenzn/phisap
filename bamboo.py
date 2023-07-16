@@ -30,7 +30,7 @@ T = TypeVar('T', bound=_Interpable)
 
 class Bamboo(Generic[T], metaclass=ABCMeta):
     @abstractmethod
-    def __getitem__(self, time: float) -> T:
+    def __matmul__(self, time: float) -> T:
         ...
 
     @abstractmethod
@@ -59,7 +59,7 @@ class BrokenBamboo(Bamboo[T]):
     def cut(self, start: float, end: float, start_value: T, end_value: T) -> None:
         bisect.insort_left(self.segments, Segment(start, end, start_value, end_value), key=lambda s: s.start)
 
-    def __getitem__(self, time: float) -> T:
+    def __matmul__(self, time: float) -> T:
         right = bisect.bisect_left(self.segments, time, key=lambda s: s.start)
         if right >= len(self.segments):
             return self.segments[-1].end_value
@@ -142,7 +142,7 @@ class LivingBamboo(Bamboo[T]):
                 self.joints.insert(insert_point, Joint(end, end_value, left_easing))
                 self.joints.insert(insert_point, Joint(start, self.joints[insert_point - 1].value, easing))
 
-    def __getitem__(self, time: float) -> T:
+    def __matmul__(self, time: float) -> T:
         right = bisect.bisect_left(self.joints, time, key=lambda j: j.timestamp)
         left = right - 1
         if right == len(self.joints):
@@ -173,10 +173,10 @@ class TwinBamboo(Bamboo[complex]):
         self.ys = ys
         self.convert = convert
 
-    def __getitem__(self, time: float) -> complex:
+    def __matmul__(self, time: float) -> complex:
         if self.convert:
-            return self.convert(complex(self.xs[time], self.ys[time]))
-        return complex(self.xs[time], self.ys[time])
+            return self.convert(complex(self.xs @ time, self.ys @ time))
+        return complex(self.xs @ time, self.ys @ time)
 
     def __repr__(self) -> str:
         return f'TwinBamboo(xs={self.xs}, ys={self.ys})'
@@ -191,8 +191,8 @@ class BambooGrove(Bamboo[T]):
         self.bamboos = bamboos
         self.zero = zero
 
-    def __getitem__(self, time: float) -> T:
-        return sum((b[time] for b in self.bamboos), self.zero)
+    def __matmul__(self, time: float) -> T:
+        return sum((b @ time for b in self.bamboos), self.zero)
 
     def __repr__(self) -> str:
         return f'BambooGrove(of {len(self.bamboos)} bamboos)'
@@ -205,7 +205,7 @@ class BambooShoot(Bamboo[T]):
         super().__init__()
         self.const = const
 
-    def __getitem__(self, time: float) -> T:
+    def __matmul__(self, time: float) -> T:
         return self.const
 
     def __repr__(self) -> str:

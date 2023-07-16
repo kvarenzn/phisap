@@ -39,7 +39,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.9'
+PHISAP_VERSION = '0.10'
 
 
 class ExtractPackageWorker(QThread):
@@ -129,14 +129,16 @@ class AutoplayWorker(QThread):
     def run(self) -> None:
         self.running = True
         timestamp, events = next(self.ansIter)
-        self.startTime = round(time.time() * 1000) + self.defaultOffset
+        self.startTime = round(time.monotonic() * 1000) + self.defaultOffset
         try:
             while self.running:
-                now = round(time.time() * 1000) - self.startTime + self.delayMs
+                now = round(time.monotonic() * 1000) - self.startTime + self.delayMs
                 if now >= timestamp:
                     for event in events:
                         self.controller.touch(*event.pos, event.action, event.pointer)
                     timestamp, events = next(self.ansIter)
+                # else:
+                #     time.sleep((timestamp - now) / 1000)
         except StopIteration:
             pass
         finally:

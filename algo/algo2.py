@@ -1,5 +1,11 @@
 # 较为激进的规划算法
 
+# 在保守算法的基础上，尽量合并note的判定区，即判定区有重叠部分的多个note视作一个note
+# 这样就可以用单个事件触发多个note的判定
+# 此外，尽量最小幅度地移动指针
+
+# 将flick视作一堆drag，将hold视作tap+一堆drag
+
 import math
 import cmath
 from typing import Iterator, NamedTuple
@@ -22,7 +28,7 @@ class PlainNote(NamedTuple):
 
 
 class Frame:
-    """一帧长度为10ms"""
+    """一帧长度为1ms"""
 
     screen: ScreenUtil
     timestamp: int
@@ -211,27 +217,27 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, defaultdict[int, 
     for line in track(chart.lines, description='统计操作帧...', console=console):
         for note in line.notes:
             ms = round(note.seconds * 1000)
-            angle = cmath.exp(line.angle[note.seconds] * 1j)
-            pos = line.position[note.seconds] + angle * note.offset
+            angle = cmath.exp(line.angle @ note.seconds * 1j)
+            pos = line.position @ note.seconds + angle * note.offset
             match note.type:
                 case NoteType.HOLD:
                     hold_ms = math.ceil(note.hold * 1000)
                     frames[ms].add(NoteType.TAP, pos, angle)
                     for offset in range(1, hold_ms + 1):
                         time = (ms + offset) / 1000
-                        angle = cmath.exp(line.angle[time] * 1j)
+                        angle = cmath.exp(line.angle @ time * 1j)
                         frames[ms + offset].add(NoteType.DRAG, line.pos(time, note.offset), angle)
                 case NoteType.FLICK:
                     if not screen.visible(pos):
                         # 这块的逻辑在algo1.py中有解释
                         for dt in range(-10, 10):
                             new_time = note.seconds + dt * line.beat_duration(note.seconds)
-                            new_line_pos = line.position[new_time]
-                            new_angle = cmath.exp(line.angle[new_time] * 1j)
+                            new_line_pos = line.position @ new_time
+                            new_angle = cmath.exp(line.angle @ new_time * 1j)
                             new_note_pos = new_line_pos + angle * note.offset
                             if screen.visible(new_note_pos):
                                 console.print(
-                                    f'[red]微调判定时间：flick(pos=({(pos.real, pos.imag)}), time={note.seconds}s) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/red]'
+                                    f'[yellow]微调判定时间：flick(pos=({(pos.real, pos.imag)}), time={note.seconds}s) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/yellow]'
                                 )
                                 angle = new_angle
                                 pos = new_note_pos

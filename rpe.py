@@ -243,8 +243,8 @@ class RpeJudgeLine(JudgeLine):
             self.notes.append(Note(note_type, start_time, end_time - start_time, complex(note['positionX'], note['yOffset'] * note['speed'])))
     
     def pos(self, seconds: float, offset: Position) -> Position:
-        angle = self.angle[seconds]
-        pos = self.position[seconds]
+        angle = self.angle @ seconds
+        pos = self.position @ seconds
         return pos + cmath.exp(angle * 1j) * offset
 
     def beat_duration(self, seconds: float) -> float:
@@ -305,8 +305,8 @@ if __name__ == '__main__':
                 running = False
 
         screen.fill('black')
-        pos = rpe.lines[0].position[seconds]
-        angle = cmath.exp(rpe.lines[0].angle[seconds] * 1j)
+        pos = rpe.lines[0].position @ seconds
+        angle = cmath.exp(rpe.lines[0].angle @ seconds * 1j)
         left = pos + angle * 3500
         right = pos - angle * 3500
         pygame.draw.circle(screen, 'white', (pos.real, pos.imag), 10)

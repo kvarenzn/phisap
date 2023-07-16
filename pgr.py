@@ -92,8 +92,8 @@ class PgrJudgeLine(JudgeLine):
                 )
 
     def pos(self, seconds: float, offset: Position) -> Position:
-        angle = self.angle[seconds]
-        pos = self.position[seconds]
+        angle = self.angle @ seconds
+        pos = self.position @ seconds
         return pos + cmath.exp(angle * 1j) * offset
 
     def beat_duration(self, _: float) -> float:
