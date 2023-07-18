@@ -90,7 +90,7 @@ class ExtractPackageWorker(QThread):
             asset_name = catalog.fname_map[filepath.name]
             if not asset_name.startswith('Assets/'):
                 continue
-            
+
             for obj in file.objects:
                 if isinstance(obj, TextAsset):
                     basedir = os.path.dirname(asset_name)
@@ -98,7 +98,7 @@ class ExtractPackageWorker(QThread):
                         os.makedirs(basedir)
                     with open(asset_name, 'w') as out:
                         out.write(obj.text)
-    
+
     def cancel(self) -> None:
         self.running = False
 
@@ -444,7 +444,7 @@ class MainWindow(QWidget):
     def onExtractProgressUpdated(self, phase: int, current: int, maxValue: int) -> None:
         if self.extractProgressDialog is None:
             return
-        
+
         hint = [self.tr('Loading...'), self.tr('Processing...'), self.tr('Extracting...')]
         self.extractProgressDialog.setLabelText(hint[phase])
         self.extractProgressDialog.setMaximum(maxValue)
@@ -543,7 +543,7 @@ class MainWindow(QWidget):
                 'algo1_flick_direction': self.algo1FlickDirection.checkedId(),
                 'algo2_flick_start': self.algo2FlickStart.value(),
                 'algo2_flick_end': self.algo2FlickEnd.value(),
-                'algo2_flick_direction': self.algo2FlickDirection.checkedId()
+                'algo2_flick_direction': self.algo2FlickDirection.checkedId(),
             }
             screen, ans = algo.solve(chart, config, self.console)
             if self.saveResult.isChecked():
@@ -607,7 +607,7 @@ class MainWindow(QWidget):
                 'algo1_flick_direction': self.algo1FlickDirection.checkedId(),
                 'algo2_flick_start': self.algo2FlickStart.value(),
                 'algo2_flick_end': self.algo2FlickEnd.value(),
-                'algo2_flick_direction': self.algo2FlickDirection.checkedId()
+                'algo2_flick_direction': self.algo2FlickDirection.checkedId(),
             }
             screen, ans = algo.solve(chart, config, self.console)
             self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))

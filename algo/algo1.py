@@ -160,6 +160,7 @@ def solve(chart: Chart, config: dict, console: Console) -> tuple[ScreenUtil, Raw
 
     # 滑键手势函数，目前定义为平行于滑键的方向滑动
     mul_factor = 1j if config['algo1_flick_direction'] == 0 else 1
+
     def flick_pos(pos: Position, offset: int, rotate: Vector) -> Position:
         rate = 1 - 2 * (offset - flick_start) / flick_duration
         return pos + rotate * mul_factor * screen.flick_radius * rate
@@ -238,35 +239,40 @@ def solve(chart: Chart, config: dict, console: Console) -> tuple[ScreenUtil, Raw
                                 f'[yellow]微调失败，采取备用方案 => flick(pos=({(note_pos.real, note_pos.imag)})[/yellow]'
                             )
 
-                    for offset in range(flick_start, flick_end + 1):
-                        note_type: SemiNoteType
-                        if offset == flick_start:
-                            note_type = SemiNoteType.FLICK_START
-                        elif offset == flick_end:
-                            note_type = SemiNoteType.FLICK_END
-                        else:
-                            note_type = SemiNoteType.FLICK
-                        # current_time = (timestamp + offset) / 1000
-                        # rotation = cmath.exp(line.angle @ current_time * 1j)
+                    frames[timestamp + flick_start].append(
+                        SemiNote(
+                            SemiNoteType.FLICK_START,
+                            screen.remap(
+                                flick_pos(note_pos, flick_start, rotation),
+                                rotation,
+                            ),
+                            current_note_id,
+                        )
+                    )
+                    for offset in range(flick_start + 1, flick_end, 8):
                         frames[timestamp + offset].append(
                             SemiNote(
-                                note_type,
+                                SemiNoteType.FLICK,
                                 screen.remap(
-                                    flick_pos(
-                                        # line.position @ current_time + note.offset * rotation, offset, rotation
-                                        note_pos, offset, rotation
-                                    ),
+                                    flick_pos(note_pos, offset, rotation),
                                     rotation,
                                 ),
                                 current_note_id,
                             )
                         )
+                    frames[timestamp + flick_end].append(
+                        SemiNote(
+                            SemiNoteType.FLICK_END,
+                            screen.remap(flick_pos(note_pos, flick_end, rotation), rotation),
+                            current_note_id,
+                        ),
+                    )
                 case NoteType.HOLD:
                     hold_ms = math.ceil(note.hold * 1000)
                     frames[timestamp].append(
                         SemiNote(SemiNoteType.HOLD_START, screen.remap(note_pos, rotation), current_note_id)
                     )
-                    for offset in range(1, hold_ms):
+                    for offset in range(1, hold_ms, 8):
                         new_time = (timestamp + offset) / 1000
                         angle = line.angle @ new_time
                         frames[timestamp + offset].append(
@@ -293,7 +299,6 @@ def solve(chart: Chart, config: dict, console: Console) -> tuple[ScreenUtil, Raw
         raise RuntimeError('planning failed')
     else:
         console.print(f'统计完毕，当前谱面共计{len(frames)}帧，最多需要{pointers_count}押')
-
 
     pointers = PointerManager(range(1000, 1000 + pointers_count))  # 几押就需要几个pointer
 
