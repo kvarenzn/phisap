@@ -50,10 +50,10 @@ class PointerManager:
     occupied: dict[NoteID, PointerRecord]  # note_id => Pointer
     current_timestamp: int
 
-    idle: set[PointerID]
-    unused: dict[PointerID, PointerRecord]
-    mark_as_released: set[int]
-    waiting_for_liftup: list[PointerRecord]
+    idle: set[PointerID]  # 只保存ID，这些指针不在屏幕上
+    unused: dict[PointerID, PointerRecord]  # 已经没有用了，不过暂时还放在屏幕上，等待“征用”
+    mark_as_released: set[PointerID]  # 规划完一轮后刚“退役”的指针，只存id
+    waiting_for_liftup: list[PointerRecord]  # 将被“征用”的在屏幕上的指针，被重新使用前需要先抬起，再落下
 
     def __init__(self, pointer_ids: Iterable[PointerID]) -> None:
         self.occupied = {}
@@ -79,7 +79,7 @@ class PointerManager:
             # 将PointerRecord从self.unused移动到self.occupied
             ptr = min(self.unused.values(), key=lambda ptr: distance_of(note.position, ptr.position))
             del self.unused[ptr.id]
-            assert ptr.timestamp < self.current_timestamp - 1
+            assert ptr.timestamp + 1 < self.current_timestamp
             self.occupied[note_id] = PointerRecord(ptr.id, note.position, self.current_timestamp)
             return ptr.id, False
 
@@ -113,10 +113,13 @@ class PointerManager:
         # 将PointerRecord从self.occupied移动到self.unused
         for note_id in self.mark_as_released:
             ptr = self.occupied[note_id]
-            self.unused[ptr.id] = ptr
             del self.occupied[note_id]
+            self.unused[ptr.id] = ptr
         self.mark_as_released.clear()
 
+        # 为重新被“征用”的指针添加抬起事件
+        # 事件发生于指针被弃用的下一帧
+        # 交由solve函数完成
         for ptr in self.waiting_for_liftup:
             yield ptr
 
@@ -135,15 +138,15 @@ class PointerManager:
         return chain(self.unused.values(), self.occupied.values())
 
 
-def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
+def solve(chart: Chart, config: dict, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
     # 获得虚拟屏幕的尺寸数据
     screen = ScreenUtil(chart.screen_width, chart.screen_height)
 
     # 定义flick的触发手法
     # 如果滑键在时刻t判定，那么在时刻t+flick_start开始滑，滑到时刻t+flick_end
     # 一共滑flick_duration毫秒
-    flick_start = -20
-    flick_end = 20
+    flick_start = config['algo1_flick_start']
+    flick_end = config['algo1_flick_end']
     flick_duration = flick_end - flick_start
 
     # 帧数据，每一帧都是note被击打时的快照
@@ -156,9 +159,10 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
     current_note_id = 0
 
     # 滑键手势函数，目前定义为平行于滑键的方向滑动
-    def flick_pos(pos: Position, offset: int, rot_vec: Vector) -> Position:
+    mul_factor = 1j if config['algo1_flick_direction'] == 0 else 1
+    def flick_pos(pos: Position, offset: int, rotate: Vector) -> Position:
         rate = 1 - 2 * (offset - flick_start) / flick_duration
-        return pos - rot_vec * screen.flick_radius * rate
+        return pos + rotate * mul_factor * screen.flick_radius * rate
 
     # 统计帧数据
     for line in track(chart.lines, description='正在统计帧...', console=console):
@@ -201,28 +205,28 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
                             new_time = note.seconds + dt * line.beat_duration(note.seconds)
                             new_line_pos = line.position @ new_time
                             new_alpha = line.angle @ new_time
-                            new_rot_vec = cmath.exp(new_alpha * 1j)
-                            new_note_pos = new_line_pos + new_rot_vec * delta
+                            new_rotate = cmath.exp(new_alpha * 1j)
+                            new_note_pos = new_line_pos + new_rotate * delta
                             if screen.visible(new_note_pos):
                                 found = True
                                 console.print(
                                     f'[yellow]微调判定时间：flick(pos=({(note_pos.real, note_pos.imag)}), time={note.seconds}) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time})[/yellow]'
                                 )
-                                rotation = new_rot_vec
+                                rotation = new_rotate
                                 note_pos = new_note_pos
                                 break
 
                             new_time = note.seconds - dt * line.beat_duration(note.seconds)
                             new_line_pos = line.position @ new_time
                             new_alpha = line.angle @ new_time
-                            new_rot_vec = cmath.exp(new_alpha * 1j)
-                            new_note_pos = new_line_pos + new_rot_vec * delta
+                            new_rotate = cmath.exp(new_alpha * 1j)
+                            new_note_pos = new_line_pos + new_rotate * delta
                             if screen.visible(new_note_pos):
                                 found = True
                                 console.print(
                                     f'[yellow]微调判定时间：flick(pos=({(note_pos.real, note_pos.imag)}), time={note.seconds}) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time})[/yellow]'
                                 )
-                                rotation = new_rot_vec
+                                rotation = new_rotate
                                 note_pos = new_note_pos
                                 break
 
@@ -234,28 +238,29 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
                                 f'[yellow]微调失败，采取备用方案 => flick(pos=({(note_pos.real, note_pos.imag)})[/yellow]'
                             )
 
-                    frames[timestamp + flick_start].append(
-                        SemiNote(
-                            SemiNoteType.FLICK_START,
-                            screen.remap(flick_pos(note_pos, flick_start, rotation), rotation),
-                            current_note_id,
-                        )
-                    )
-                    for offset in range(flick_start + 1, flick_end):
+                    for offset in range(flick_start, flick_end + 1):
+                        note_type: SemiNoteType
+                        if offset == flick_start:
+                            note_type = SemiNoteType.FLICK_START
+                        elif offset == flick_end:
+                            note_type = SemiNoteType.FLICK_END
+                        else:
+                            note_type = SemiNoteType.FLICK
+                        # current_time = (timestamp + offset) / 1000
+                        # rotation = cmath.exp(line.angle @ current_time * 1j)
                         frames[timestamp + offset].append(
                             SemiNote(
-                                SemiNoteType.FLICK,
-                                screen.remap(flick_pos(note_pos, offset, rotation), rotation),
+                                note_type,
+                                screen.remap(
+                                    flick_pos(
+                                        # line.position @ current_time + note.offset * rotation, offset, rotation
+                                        note_pos, offset, rotation
+                                    ),
+                                    rotation,
+                                ),
                                 current_note_id,
                             )
                         )
-                    frames[timestamp + flick_end].append(
-                        SemiNote(
-                            SemiNoteType.FLICK_END,
-                            screen.remap(flick_pos(note_pos, flick_end, rotation), rotation),
-                            current_note_id,
-                        )
-                    )
                 case NoteType.HOLD:
                     hold_ms = math.ceil(note.hold * 1000)
                     frames[timestamp].append(
@@ -283,10 +288,12 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
             current_note_id += 1
 
     pointers_count = max(len(frame) for _, frame in frames.items())
-    console.print(f'统计完毕，当前谱面共计{len(frames)}帧，最多需要{pointers_count}押')
     if pointers_count > 10:
         console.print('[red]规划失败，请使用激进算法[/red]')
         raise RuntimeError('planning failed')
+    else:
+        console.print(f'统计完毕，当前谱面共计{len(frames)}帧，最多需要{pointers_count}押')
+
 
     pointers = PointerManager(range(1000, 1000 + pointers_count))  # 几押就需要几个pointer
 

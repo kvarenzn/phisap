@@ -158,6 +158,7 @@ def dump_data(screen: ScreenUtil, ans: RawAnswerType) -> bytes:
             result.extend(event.to_serializable())
     return result
 
+
 def load_data(content: bytes) -> tuple[ScreenUtil, RawAnswerType]:
     reader = BytesIO(content)
     assert reader.read(4) == b'PSAP'
@@ -167,8 +168,8 @@ def load_data(content: bytes) -> tuple[ScreenUtil, RawAnswerType]:
         ts_bytes = reader.read(4)
         if not ts_bytes:
             break
-        ts, = struct.unpack('!i', ts_bytes)
-        length, = struct.unpack('!b', reader.read(1))
+        (ts,) = struct.unpack('!i', ts_bytes)
+        (length,) = struct.unpack('!b', reader.read(1))
         ans.append((ts, [VirtualTouchEvent.from_serializable(reader.read(21)) for _ in range(length)]))
     return ScreenUtil(width, height), ans
 

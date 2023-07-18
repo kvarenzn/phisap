@@ -95,20 +95,23 @@ def distance_of(note1: PlainNote | None, note2: PlainNote | None) -> float:
     return abs(note2.pos - note1.pos)
 
 
-FLICK_START = -15
-FLICK_END = 15
-FLICK_DURATION = FLICK_END - FLICK_START
-
-
 class PointerAllocator:
+    flick_start: int
+    flick_end: int
+    flick_duration: int
+    flick_rotate_factor: complex
     screen: ScreenUtil
     pointers: list[Pointer]
     events: defaultdict[int, list[VirtualTouchEvent]]
     last_timestamp: int | None
     now: int
 
-    def __init__(self, screen: ScreenUtil, max_pointers_count: int = 10, begin_at: int = 1000):
+    def __init__(self, screen: ScreenUtil, flick_start: int, flick_end: int, flick_direction: int, max_pointers_count: int = 10, begin_at: int = 1000):
         self.screen = screen
+        self.flick_start = flick_start
+        self.flick_end = flick_end
+        self.flick_duration = self.flick_end - self.flick_start
+        self.flick_rotate_factor = 1j if flick_direction == 0 else 1
         self.recycle_scope = (screen.width + screen.height) / 20
         self.pointers = [Pointer(i + begin_at) for i in range(max_pointers_count)]
         self.events = defaultdict(list)
@@ -150,12 +153,12 @@ class PointerAllocator:
         angle = note.angle
         note_pos = 0j
         pos = self.screen.remap(note.pos, angle)
-        for delta in range(FLICK_DURATION):
-            rate = 1 - 2 * delta / FLICK_DURATION
-            note_pos = pos - angle.conjugate() * rate * self.screen.flick_radius
+        for delta in range(self.flick_duration):
+            rate = 1 - 2 * delta / self.flick_duration
+            note_pos = pos + angle * self.flick_rotate_factor * rate * self.screen.flick_radius
             self._insert(self.now + delta, VirtualTouchEvent(note_pos, TouchAction.MOVE, pointer.id))
         pointer.note = note._replace(pos=note_pos)
-        pointer.age = FLICK_START - FLICK_END
+        pointer.age = -self.flick_duration
 
     def _drag(self, pointer: Pointer, note: PlainNote) -> None:
         if pointer.note is None:
@@ -209,7 +212,10 @@ class PointerAllocator:
         return [(ts, events) for ts, events in sorted(self.events.items())]
 
 
-def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
+def solve(chart: Chart, config: dict, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
+    flick_start = config['algo2_flick_start']
+    flick_end = config['algo2_flick_end']
+    flick_direction = config['algo2_flick_direction']
     screen = ScreenUtil(chart.screen_width, chart.screen_height)
     frames = Frames(screen)
 
@@ -230,7 +236,7 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
                 case NoteType.FLICK:
                     if not screen.visible(pos):
                         # 这块的逻辑在algo1.py中有解释
-                        for dt in range(-10, 10):
+                        for dt in range(1, 10):
                             new_time = note.seconds + dt * line.beat_duration(note.seconds)
                             new_line_pos = line.position @ new_time
                             new_angle = cmath.exp(line.angle @ new_time * 1j)
@@ -242,14 +248,25 @@ def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
                                 angle = new_angle
                                 pos = new_note_pos
                                 break
+                            new_time = note.seconds - dt * line.beat_duration(note.seconds)
+                            new_line_pos = line.position @ new_time
+                            new_angle = cmath.exp(line.angle @ new_time * 1j)
+                            new_note_pos = new_line_pos + angle * note.offset
+                            if screen.visible(new_note_pos):
+                                console.print(
+                                    f'[yellow]微调判定时间：flick(pos=({(pos.real, pos.imag)}), time={note.seconds}s) => flick(pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/yellow]'
+                                )
+                                angle = new_angle
+                                pos = new_note_pos
+                                break
 
-                    frames[ms + FLICK_START].add(NoteType.FLICK, pos, angle)
+                    frames[ms + flick_start].add(NoteType.FLICK, pos, angle)
                 case _:
                     frames[ms].add(note.type, pos, angle)
 
     console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
-    allocator = PointerAllocator(screen)
+    allocator = PointerAllocator(screen, flick_start, flick_end, flick_direction)
 
     for frame in track(frames, description='规划触控事件...'):
         allocator.allocate(frame)

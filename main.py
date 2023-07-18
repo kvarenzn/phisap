@@ -30,7 +30,7 @@ from rich.console import Console
 from control import DeviceController
 from catalog import Catalog
 from extract import AssetsManager, TextAsset, ObjectReader, ClassID
-from algo.algo_base import ScreenUtil, dump_data, load_data, WindowGeometry, remap_events, TouchEvent, RawAnswerType, AnswerType
+from algo.algo_base import ScreenUtil, dump_data, load_data, WindowGeometry, remap_events, TouchEvent, RawAnswerType
 from basis import Chart
 from cache_manager import CacheManager
 from control import DeviceController
@@ -39,7 +39,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.11'
+PHISAP_VERSION = '0.12'
 
 
 class ExtractPackageWorker(QThread):
@@ -137,8 +137,6 @@ class AutoplayWorker(QThread):
                     for event in events:
                         self.controller.touch(*event.pos, event.action, event.pointer_id)
                     timestamp, events = next(self.ansIter)
-                # else:
-                #     time.sleep((timestamp - now) / 1000)
         except StopIteration:
             pass
         finally:
@@ -171,7 +169,15 @@ class MainWindow(QWidget):
     difficultySelector: QComboBox
     customChartPath: QLineEdit
     customSelectButton: QPushButton
-    algorithmSelector: QButtonGroup
+    algorithmSelectorTabs: QTabWidget
+
+    algo1FlickStart: QSpinBox
+    algo1FlickEnd: QSpinBox
+    algo1FlickDirection: QButtonGroup
+    algo2FlickStart: QSpinBox
+    algo2FlickEnd: QSpinBox
+    algo2FlickDirection: QButtonGroup
+
     preferCache: QCheckBox
     mainModeSelectTabs: QTabWidget
     syncModeSelector: QButtonGroup
@@ -248,17 +254,67 @@ class MainWindow(QWidget):
         self.chartSelectTabs.addTab(selectExtractedView, self.tr('Choose Extracted'))
         self.chartSelectTabs.addTab(selectCustomView, self.tr('Load Custom'))
 
-        self.algorithmSelector = QButtonGroup()
-        algo1Radio = QRadioButton(text=self.tr('Conservative'))
-        algo1Radio.setChecked(True)
-        algo2Radio = QRadioButton(text=self.tr('Radical'))
-        algorithmSelectionLayout = QHBoxLayout()
-        algorithmSelectionLayout.addWidget(QLabel(text=self.tr('Algorithm:')))
-        algorithmSelectionLayout.addWidget(algo1Radio)
-        algorithmSelectionLayout.addWidget(algo2Radio)
-        self.algorithmSelector.addButton(algo1Radio, id=0)
-        self.algorithmSelector.addButton(algo2Radio, id=1)
-        self.mainLayout.addLayout(algorithmSelectionLayout)
+        self.algorithmSelectorTabs = QTabWidget()
+        self.mainLayout.addWidget(self.algorithmSelectorTabs)
+        algo1ConfigView = QWidget()
+        self.algorithmSelectorTabs.addTab(algo1ConfigView, self.tr('Conserv Algo'))
+        algo1ConfigViewLayout = QVBoxLayout()
+        algo1ConfigView.setLayout(algo1ConfigViewLayout)
+        line1 = QHBoxLayout()
+        algo1ConfigViewLayout.addLayout(line1)
+        line1.addWidget(QLabel(text=self.tr('Flick start at:')))
+        self.algo1FlickStart = QSpinBox()
+        self.algo1FlickStart.setRange(-1145141919, 1145141919)
+        line1.addWidget(self.algo1FlickStart)
+        line1.addWidget(QLabel(text=self.tr('ms')))
+        line2 = QHBoxLayout()
+        algo1ConfigViewLayout.addLayout(line2)
+        line2.addWidget(QLabel(text=self.tr('Flick end at:')))
+        self.algo1FlickEnd = QSpinBox()
+        self.algo1FlickEnd.setRange(-1145141919, 1145141919)
+        line2.addWidget(self.algo1FlickEnd)
+        line2.addWidget(QLabel(text=self.tr('ms')))
+        line3 = QHBoxLayout()
+        algo1ConfigViewLayout.addLayout(line3)
+        self.algo1FlickDirection = QButtonGroup()
+        line3.addWidget(QLabel(text=self.tr('Flick Direction:')))
+        direc1 = QRadioButton(text=self.tr('Perpend. to'))
+        direc2 = QRadioButton(text=self.tr('Parallel to'))
+        line3.addWidget(direc1)
+        line3.addWidget(direc2)
+        self.algo1FlickDirection.addButton(direc1, id=0)
+        self.algo1FlickDirection.addButton(direc2, id=1)
+        direc1.setChecked(True)
+
+        algo2ConfigView = QWidget()
+        self.algorithmSelectorTabs.addTab(algo2ConfigView, self.tr('Radical Algo'))
+        algo2ConfigViewLayout = QVBoxLayout()
+        algo2ConfigView.setLayout(algo2ConfigViewLayout)
+        line1 = QHBoxLayout()
+        algo2ConfigViewLayout.addLayout(line1)
+        line1.addWidget(QLabel(text=self.tr('Flick start at:')))
+        self.algo2FlickStart = QSpinBox()
+        self.algo2FlickStart.setRange(-1145141919, 1145141919)
+        line1.addWidget(self.algo2FlickStart)
+        line1.addWidget(QLabel(text=self.tr('ms')))
+        line2 = QHBoxLayout()
+        algo2ConfigViewLayout.addLayout(line2)
+        line2.addWidget(QLabel(text=self.tr('Flick end at:')))
+        self.algo2FlickEnd = QSpinBox()
+        self.algo2FlickEnd.setRange(-1145141919, 1145141919)
+        line2.addWidget(self.algo2FlickEnd)
+        line2.addWidget(QLabel(text=self.tr('ms')))
+        line3 = QHBoxLayout()
+        algo2ConfigViewLayout.addLayout(line3)
+        self.algo2FlickDirection = QButtonGroup()
+        line3.addWidget(QLabel(text=self.tr('Flick Direction:')))
+        direc1 = QRadioButton(text=self.tr('Perpend. to'))
+        direc2 = QRadioButton(text=self.tr('Parallel to'))
+        line3.addWidget(direc1)
+        line3.addWidget(direc2)
+        self.algo2FlickDirection.addButton(direc1, id=0)
+        self.algo2FlickDirection.addButton(direc2, id=1)
+        direc1.setChecked(True)
 
         self.mainModeSelectTabs = QTabWidget()
         self.mainLayout.addWidget(self.mainModeSelectTabs)
@@ -330,7 +386,13 @@ class MainWindow(QWidget):
             self.difficultySelector.setCurrentText(
                 self.settings.value('difficulty', self.difficultySelector.currentText(), str)
             )
-        self.algorithmSelector.button(self.settings.value('algorithm', 0, int)).setChecked(True)
+        self.algorithmSelectorTabs.setCurrentIndex(self.settings.value('algorithm', 0, int))
+        self.algo1FlickStart.setValue(self.settings.value('algo1FlickStart', -15, int))
+        self.algo1FlickEnd.setValue(self.settings.value('algo1FlickEnd', 15, int))
+        self.algo1FlickDirection.button(self.settings.value('algo1FlickDirection', 0, int)).setChecked(True)
+        self.algo2FlickStart.setValue(self.settings.value('algo2FlickStart', -15, int))
+        self.algo2FlickEnd.setValue(self.settings.value('algo2FlickEnd', 15, int))
+        self.algo2FlickDirection.button(self.settings.value('algo2FlickDirection', 1, int)).setChecked(True)
         self.customChartPath.setText(self.settings.value('customChartPath', '', str))
         self.preferCache.setChecked(self.settings.value('preferCache', True, bool))
         self.syncModeSelector.button(self.settings.value('syncMode', 0, int)).setChecked(True)
@@ -343,7 +405,13 @@ class MainWindow(QWidget):
             self.settings.setValue('songId', self.songIdSelector.currentText())
         if self.difficultySelector.count() > 1:
             self.settings.setValue('difficulty', self.difficultySelector.currentText())
-        self.settings.setValue('algorithm', self.algorithmSelector.checkedId())
+        self.settings.setValue('algorithm', self.algorithmSelectorTabs.currentIndex())
+        self.settings.setValue('algo1FlickStart', self.algo1FlickStart.value())
+        self.settings.setValue('algo1FlickEnd', self.algo1FlickEnd.value())
+        self.settings.setValue('algo1FlickDirection', self.algo1FlickDirection.checkedId())
+        self.settings.setValue('algo2FlickStart', self.algo2FlickStart.value())
+        self.settings.setValue('algo2FlickEnd', self.algo2FlickEnd.value())
+        self.settings.setValue('algo2FlickDirection', self.algo2FlickDirection.checkedId())
         self.settings.setValue('customChartPath', self.customChartPath.text())
         self.settings.setValue('preferCache', self.preferCache.isChecked())
         self.settings.setValue('syncMode', self.syncModeSelector.checkedId())
@@ -461,7 +529,7 @@ class MainWindow(QWidget):
         self.saveSettings()
         self.testButton.setDisabled(True)
         try:
-            algoIndex = self.algorithmSelector.checkedId()
+            algoIndex = self.algorithmSelectorTabs.currentIndex()
             content, chart = self.loadChart()
             screen: ScreenUtil
             ans: RawAnswerType
@@ -469,7 +537,15 @@ class MainWindow(QWidget):
                 import algo.algo1 as algo
             else:
                 import algo.algo2 as algo
-            screen, ans = algo.solve(chart, self.console)
+            config = {
+                'algo1_flick_start': self.algo1FlickStart.value(),
+                'algo1_flick_end': self.algo1FlickEnd.value(),
+                'algo1_flick_direction': self.algo1FlickDirection.checkedId(),
+                'algo2_flick_start': self.algo2FlickStart.value(),
+                'algo2_flick_end': self.algo2FlickEnd.value(),
+                'algo2_flick_direction': self.algo2FlickDirection.checkedId()
+            }
+            screen, ans = algo.solve(chart, config, self.console)
             if self.saveResult.isChecked():
                 self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
             box = QMessageBox(self)
@@ -510,7 +586,7 @@ class MainWindow(QWidget):
     def autoplay(self) -> None:
         self.saveSettings()
         content, chart = self.loadChart()
-        algoIndex = self.algorithmSelector.checkedId()
+        algoIndex = self.algorithmSelectorTabs.currentIndex()
         ans: RawAnswerType
         screen: ScreenUtil
         cacheData: bytes | None = None
@@ -525,7 +601,15 @@ class MainWindow(QWidget):
                 import algo.algo1 as algo
             else:
                 import algo.algo2 as algo
-            screen, ans = algo.solve(chart, self.console)
+            config = {
+                'algo1_flick_start': self.algo1FlickStart.value(),
+                'algo1_flick_end': self.algo1FlickEnd.value(),
+                'algo1_flick_direction': self.algo1FlickDirection.checkedId(),
+                'algo2_flick_start': self.algo2FlickStart.value(),
+                'algo2_flick_end': self.algo2FlickEnd.value(),
+                'algo2_flick_direction': self.algo2FlickDirection.checkedId()
+            }
+            screen, ans = algo.solve(chart, config, self.console)
             self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
 
         assert self.controller is not None
