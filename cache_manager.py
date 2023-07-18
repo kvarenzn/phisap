@@ -19,25 +19,25 @@ class CacheManager:
         cache_file = self.cache_dir / f'{content_hash}.psap'
         return cache_file.exists()
 
-    def find_cache_for_content(self, content: str) -> str | None:
+    def find_cache_for_content(self, content: str) -> bytes | None:
         content_hash = self._calc_hash(content)
         cache_file = self.cache_dir / f'{content_hash}.psap'
         if cache_file.exists():
-            with cache_file.open() as f:
+            with cache_file.open('rb') as f:
                 return f.read()
     
-    def find_cache_for_file(self, file: str | Path) -> str | None:
+    def find_cache_for_file(self, file: str | Path) -> bytes | None:
         with Path(file).open() as f:
             return self.find_cache_for_content(f.read())
 
-    def write_cache_of_chart(self, chart: str | Path, cache: str):
+    def write_cache_of_chart(self, chart: str | Path, cache: bytes):
         content_hash = self._calc_hash(Path(chart).open().read())
-        with (self.cache_dir / f'{content_hash}.psap').open('w') as out:
+        with (self.cache_dir / f'{content_hash}.psap').open('wb') as out:
             out.write(cache)
     
-    def write_cache_of_content(self, content: str, cache: str):
+    def write_cache_of_content(self, content: str, cache: bytes):
         content_hash = self._calc_hash(content)
-        with (self.cache_dir / f'{content_hash}.psap').open('w') as out:
+        with (self.cache_dir / f'{content_hash}.psap').open('wb') as out:
             out.write(cache)
 
 

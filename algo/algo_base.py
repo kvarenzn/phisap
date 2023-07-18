@@ -1,8 +1,9 @@
 # 指针规划算法的基类和一些实用类型、函数
 from typing import Self
 from enum import Enum
-from typing import NamedTuple
-import json
+from typing import NamedTuple, TypeAlias
+from io import BytesIO
+import struct
 
 from basis import Position, Vector
 
@@ -92,31 +93,35 @@ class TouchAction(Enum):
 class TouchEvent(NamedTuple):
     pos: tuple[int, int]
     action: TouchAction
-    pointer: int
+    pointer_id: int
 
 
 class VirtualTouchEvent(NamedTuple):
     pos: Position
     action: TouchAction
-    pointer: int
+    pointer_id: int
 
     def __str__(self) -> str:
-        return f'''TouchEvent<{self.pointer} {self.action.name} @ ({self.pos.real:4.2f}, {self.pos.imag:4.2f})>'''
+        return f'''TouchEvent<{self.pointer_id} {self.action.name} @ ({self.pos.real:4.2f}, {self.pos.imag:4.2f})>'''
 
-    def to_serializable(self) -> dict:
-        return {'pos': [self.pos.real, self.pos.imag], 'action': self.action.value, 'pointer': self.pointer}
+    def to_serializable(self) -> bytes:
+        return struct.pack('!BIdd', self.action.value, self.pointer_id, self.pos.real, self.pos.imag)
 
     @classmethod
-    def from_serializable(cls, obj: dict) -> Self:
-        x, y = obj['pos']
-        return VirtualTouchEvent(complex(x, y), TouchAction(obj['action']), obj['pointer'])
+    def from_serializable(cls, data: bytes) -> Self:
+        action, pointer_id, x, y = struct.unpack('!BIdd', data)
+        return VirtualTouchEvent(complex(x, y), TouchAction(action), pointer_id)
 
     def _map_to(self, x_offset: int, y_offset: int, x_scale: float, y_scale: float) -> TouchEvent:
         return TouchEvent(
             pos=(x_offset + round(self.pos.real * x_scale), y_offset + round(self.pos.imag * y_scale)),
             action=self.action,
-            pointer=self.pointer,
+            pointer_id=self.pointer_id,
         )
+
+
+AnswerType: TypeAlias = list[tuple[int, list[TouchEvent]]]
+RawAnswerType: TypeAlias = list[tuple[int, list[VirtualTouchEvent]]]
 
 
 class WindowGeometry(NamedTuple):
@@ -126,42 +131,46 @@ class WindowGeometry(NamedTuple):
     h: int
 
 
-def remap_events(
-    screen: ScreenUtil, geometry: WindowGeometry, answer: dict[int, list[VirtualTouchEvent]]
-) -> list[tuple[int, list[TouchEvent]]]:
-    result = []
+def remap_events(screen: ScreenUtil, geometry: WindowGeometry, answer: RawAnswerType) -> AnswerType:
     x_scale = geometry.w / screen.width
     y_scale = geometry.h / screen.height
-    for ts in sorted(answer.keys()):
-        converted = []
-        for event in answer[ts]:
-            converted.append(
+    return [
+        (
+            ts,
+            [
                 TouchEvent(
                     (geometry.x + round(event.pos.real * x_scale), geometry.y + round(event.pos.imag * y_scale)),
                     event.action,
-                    event.pointer,
+                    event.pointer_id,
                 )
-            )
-        result.append((ts, converted))
+                for event in events
+            ],
+        )
+        for ts, events in answer
+    ]
+
+
+def dump_data(screen: ScreenUtil, ans: RawAnswerType) -> bytes:
+    result = bytearray(b'PSAP' + struct.pack('!II', screen.width, screen.height))
+    for ts, events in ans:
+        result.extend(struct.pack('!iB', ts, len(events)))
+        for event in events:
+            result.extend(event.to_serializable())
     return result
 
-
-def dump_to_json(screen: ScreenUtil, ans: dict[int, list[VirtualTouchEvent]]):
-    return json.dumps(
-        {
-            'width': screen.width,
-            'height': screen.height,
-            'events': {timestamp: [event.to_serializable() for event in events] for timestamp, events in ans.items()},
-        }
-    )
-
-
-def load_from_json(content: str) -> tuple[ScreenUtil, dict[int, list[VirtualTouchEvent]]]:
-    dic = json.loads(content)
-    return ScreenUtil(dic['width'], dic['height']), {
-        int(ts): [VirtualTouchEvent.from_serializable(event) for event in events]
-        for ts, events in dic['events'].items()
-    }
+def load_data(content: bytes) -> tuple[ScreenUtil, RawAnswerType]:
+    reader = BytesIO(content)
+    assert reader.read(4) == b'PSAP'
+    width, height = struct.unpack('!II', reader.read(8))
+    ans = []
+    while True:
+        ts_bytes = reader.read(4)
+        if not ts_bytes:
+            break
+        ts, = struct.unpack('!i', ts_bytes)
+        length, = struct.unpack('!b', reader.read(1))
+        ans.append((ts, [VirtualTouchEvent.from_serializable(reader.read(21)) for _ in range(length)]))
+    return ScreenUtil(width, height), ans
 
 
 __all__ = ['TouchAction', 'VirtualTouchEvent', 'TouchEvent', 'distance_of', 'ScreenUtil']

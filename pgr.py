@@ -5,6 +5,7 @@ from bamboo import BrokenBamboo
 import itertools
 import cmath
 
+
 class PgrNoteDict(TypedDict):
     type: int
     time: int
@@ -12,13 +13,6 @@ class PgrNoteDict(TypedDict):
     holdTime: float
     speed: float
     floorPosition: float
-
-
-class PgrSpeedEventDict(TypedDict, total=False):
-    startTime: Required[float]
-    endTime: Required[float]
-    floorPosition: float
-    value: Required[float]
 
 
 class PgrNormalEventDict(TypedDict, total=False):
@@ -34,8 +28,6 @@ class PgrJudgeLineDict(TypedDict):
     bpm: float
     notesAbove: list[PgrNoteDict]
     notesBelow: list[PgrNoteDict]
-    speedEvents: list[PgrSpeedEventDict]
-    judgeLineDisappearEvents: list[PgrNormalEventDict]
     judgeLineMoveEvents: list[PgrNormalEventDict]
     judgeLineRotateEvents: list[PgrNormalEventDict]
 
@@ -59,7 +51,12 @@ class PgrJudgeLine(JudgeLine):
         self.bpm = dic['bpm']
         beats_length = 1.875 / self.bpm
         self.notes = [
-            Note(PGR_NOTE_TYPES[n['type']], n['time'] * beats_length, n.get('holdTime', 0) * beats_length, n['positionX'])
+            Note(
+                PGR_NOTE_TYPES[n['type']],
+                n['time'] * beats_length,
+                n.get('holdTime', 0) * beats_length,
+                n['positionX'] * 0.9,
+            )
             for n in itertools.chain(dic['notesAbove'], dic['notesBelow'])
         ]
         self.angle = BrokenBamboo[float]()
@@ -79,7 +76,7 @@ class PgrJudgeLine(JudgeLine):
                     event['startTime'] * beats_length,
                     event['endTime'] * beats_length,
                     complex(sv // 1000, sv % 1000),
-                    complex(ev // 1000, ev % 1000)
+                    complex(ev // 1000, ev % 1000),
                 )
         else:
             for event in dic['judgeLineMoveEvents']:
@@ -113,6 +110,4 @@ class PgrChart(Chart):
             self.screen_width = 16
             self.screen_height = 9
         self.offset = dic['offset']
-        self.lines = [
-            PgrJudgeLine(line, version) for line in dic['judgeLineList']
-        ]
+        self.lines = [PgrJudgeLine(line, version) for line in dic['judgeLineList']]

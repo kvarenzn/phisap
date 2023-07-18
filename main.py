@@ -30,7 +30,7 @@ from rich.console import Console
 from control import DeviceController
 from catalog import Catalog
 from extract import AssetsManager, TextAsset, ObjectReader, ClassID
-from algo.algo_base import ScreenUtil, dump_to_json, load_from_json, WindowGeometry, remap_events, TouchEvent
+from algo.algo_base import ScreenUtil, dump_data, load_data, WindowGeometry, remap_events, TouchEvent, RawAnswerType, AnswerType
 from basis import Chart
 from cache_manager import CacheManager
 from control import DeviceController
@@ -39,7 +39,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.10'
+PHISAP_VERSION = '0.11'
 
 
 class ExtractPackageWorker(QThread):
@@ -135,7 +135,7 @@ class AutoplayWorker(QThread):
                 now = round(time.monotonic() * 1000) - self.startTime + self.delayMs
                 if now >= timestamp:
                     for event in events:
-                        self.controller.touch(*event.pos, event.action, event.pointer)
+                        self.controller.touch(*event.pos, event.action, event.pointer_id)
                     timestamp, events = next(self.ansIter)
                 # else:
                 #     time.sleep((timestamp - now) / 1000)
@@ -464,14 +464,14 @@ class MainWindow(QWidget):
             algoIndex = self.algorithmSelector.checkedId()
             content, chart = self.loadChart()
             screen: ScreenUtil
-            ans: dict
+            ans: RawAnswerType
             if algoIndex == 0:
                 import algo.algo1 as algo
             else:
                 import algo.algo2 as algo
             screen, ans = algo.solve(chart, self.console)
             if self.saveResult.isChecked():
-                self.cacheManager.write_cache_of_content(content, dump_to_json(screen, ans))
+                self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
             box = QMessageBox(self)
             box.setText(self.tr('Done.'))
             box.exec()
@@ -511,22 +511,22 @@ class MainWindow(QWidget):
         self.saveSettings()
         content, chart = self.loadChart()
         algoIndex = self.algorithmSelector.checkedId()
-        ans: dict
+        ans: RawAnswerType
         screen: ScreenUtil
-        ansJson: str | None = None
+        cacheData: bytes | None = None
 
         if self.preferCache.isChecked():
-            ansJson = self.cacheManager.find_cache_for_content(content)
+            cacheData = self.cacheManager.find_cache_for_content(content)
 
-        if ansJson is not None:
-            screen, ans = load_from_json(ansJson)
+        if cacheData is not None:
+            screen, ans = load_data(cacheData)
         else:
             if algoIndex == 0:
                 import algo.algo1 as algo
             else:
                 import algo.algo2 as algo
             screen, ans = algo.solve(chart, self.console)
-            self.cacheManager.write_cache_of_content(content, dump_to_json(screen, ans))
+            self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
 
         assert self.controller is not None
 
@@ -553,7 +553,7 @@ class MainWindow(QWidget):
         self.delayLabel.setText(self.tr('Offset:'))
         if self.syncModeSelector.checkedId() == 0:
             # Manual
-            self.autoplayWorker = AutoplayWorker(ansIter, -adaptedAns[0][0] - 10, self)  # -10 for the reaction delay
+            self.autoplayWorker = AutoplayWorker(ansIter, -adaptedAns[0][0], self)
             self.lastDelayValue = self.delayInput.value()
 
             def waitForBegin():

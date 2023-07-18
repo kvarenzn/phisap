@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from collections import defaultdict
 
 from basis import Chart, NoteType, Position, Vector
-from .algo_base import TouchAction, VirtualTouchEvent, ScreenUtil
+from .algo_base import TouchAction, VirtualTouchEvent, ScreenUtil, AnswerType, RawAnswerType
 
 
 from rich.console import Console
@@ -204,12 +204,12 @@ class PointerAllocator:
             if pointer.note:
                 self._insert(final, VirtualTouchEvent(pointer.note.pos, TouchAction.UP, pointer.id))
 
-    def done(self) -> defaultdict[int, list[VirtualTouchEvent]]:
+    def done(self) -> RawAnswerType:
         self.withdraw()
-        return self.events
+        return [(ts, events) for ts, events in sorted(self.events.items())]
 
 
-def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, defaultdict[int, list[VirtualTouchEvent]]]:
+def solve(chart: Chart, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
     screen = ScreenUtil(chart.screen_width, chart.screen_height)
     frames = Frames(screen)
 

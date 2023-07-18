@@ -61,9 +61,7 @@ class BrokenBamboo(Bamboo[T]):
 
     def __matmul__(self, time: float) -> T:
         right = bisect.bisect_left(self.segments, time, key=lambda s: s.start)
-        if right >= len(self.segments):
-            return self.segments[-1].end_value
-        if equal(self.segments[right].start, time):
+        if right < len(self.segments) and equal(self.segments[right].start, time):
             return self.segments[right].start_value
         seg = self.segments[right - 1]
         t = (time - seg.start) / (seg.end - seg.start)

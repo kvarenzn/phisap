@@ -11,3 +11,4 @@ cache
 scrcpy-server-*
 __pycache__/
 .settings.ini
+test.py
