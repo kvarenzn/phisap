@@ -11,7 +11,7 @@ from itertools import chain
 from collections import defaultdict
 from enum import Enum
 
-from .algo_base import RawAnswerType, TouchAction, VirtualTouchEvent, distance_of, ScreenUtil
+from .algo_base import RawAnswerType, TouchAction, VirtualTouchEvent, distance_of, ScreenUtil, AlgorithmConfigure
 
 from basis import Chart, NoteType, Position, Vector
 
@@ -138,7 +138,7 @@ class PointerManager:
         return chain(self.unused.values(), self.occupied.values())
 
 
-def solve(chart: Chart, config: dict, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
+def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
     # 获得虚拟屏幕的尺寸数据
     screen = ScreenUtil(chart.screen_width, chart.screen_height)
 

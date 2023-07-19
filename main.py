@@ -30,7 +30,16 @@ from rich.console import Console
 from control import DeviceController
 from catalog import Catalog
 from extract import AssetsManager, TextAsset, ObjectReader, ClassID
-from algo.algo_base import ScreenUtil, dump_data, load_data, WindowGeometry, remap_events, TouchEvent, RawAnswerType
+from algo.algo_base import (
+    AlgorithmConfigure,
+    ScreenUtil,
+    dump_data,
+    load_data,
+    WindowGeometry,
+    remap_events,
+    TouchEvent,
+    RawAnswerType,
+)
 from basis import Chart
 from cache_manager import CacheManager
 from control import DeviceController
@@ -191,6 +200,24 @@ class MainWindow(QWidget):
     lastDelayValue: int
 
     settings: QSettings
+
+    SETTINGS: dict[str, tuple[str, typing.Any] | typing.Any] = {
+        'songId': ('songIdSelector', None),
+        'difficulty': ('difficultySelector', None),
+        'algorithm': ('algorithmSelectorTabs', 0),
+        'algo1FlickStart': -17,
+        'algo1FlickEnd': 17,
+        'algo1FlickDirection': 0,
+        'algo2FlickStart': -17,
+        'algo2FlickEnd': 17,
+        'algo2FlickDirection': 1,
+        'customChartPath': '',
+        'preferCache': True,
+        'syncMode': ('syncModeSelector', 0),
+        'delay': ('delayInput', 0),
+        'aspectRatio': ('aspectRatioSelector', 0),
+        'saveCache': ('saveResult', False),
+    }
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -380,44 +407,47 @@ class MainWindow(QWidget):
         self.loadSettings()
 
     def loadSettings(self) -> None:
-        if self.songIdSelector.count() > 1:
-            self.songIdSelector.setCurrentText(self.settings.value('songId', self.songIdSelector.currentText(), str))
-        if self.difficultySelector.count() > 1:
-            self.difficultySelector.setCurrentText(
-                self.settings.value('difficulty', self.difficultySelector.currentText(), str)
-            )
-        self.algorithmSelectorTabs.setCurrentIndex(self.settings.value('algorithm', 0, int))
-        self.algo1FlickStart.setValue(self.settings.value('algo1FlickStart', -15, int))
-        self.algo1FlickEnd.setValue(self.settings.value('algo1FlickEnd', 15, int))
-        self.algo1FlickDirection.button(self.settings.value('algo1FlickDirection', 0, int)).setChecked(True)
-        self.algo2FlickStart.setValue(self.settings.value('algo2FlickStart', -15, int))
-        self.algo2FlickEnd.setValue(self.settings.value('algo2FlickEnd', 15, int))
-        self.algo2FlickDirection.button(self.settings.value('algo2FlickDirection', 1, int)).setChecked(True)
-        self.customChartPath.setText(self.settings.value('customChartPath', '', str))
-        self.preferCache.setChecked(self.settings.value('preferCache', True, bool))
-        self.syncModeSelector.button(self.settings.value('syncMode', 0, int)).setChecked(True)
-        self.delayInput.setValue(self.settings.value('delay', 0, int))
-        self.aspectRatioSelector.button(self.settings.value('aspectRatio', 0, int)).setChecked(True)
-        self.saveResult.setChecked(self.settings.value('saveCache', False, bool))
+        for key, info in self.SETTINGS.items():
+            if isinstance(info, tuple):
+                widgetName, defaultValue = info
+            else:
+                widgetName = key
+                defaultValue = info
+            widget = getattr(self, widgetName)
+            if isinstance(widget, QComboBox):
+                if widget.count() > 1:
+                    widget.setCurrentText(self.settings.value(key, defaultValue or widget.currentText(), str))
+            elif isinstance(widget, QTabWidget):
+                widget.setCurrentIndex(self.settings.value(key, defaultValue, type(defaultValue)))
+            elif isinstance(widget, QSpinBox):
+                widget.setValue(self.settings.value(key, defaultValue, type(defaultValue)))
+            elif isinstance(widget, QButtonGroup):
+                widget.button(self.settings.value(key, defaultValue, type(defaultValue))).setChecked(True)
+            elif isinstance(widget, QLineEdit):
+                widget.setText(self.settings.value(key, defaultValue, type(defaultValue)))
+            elif isinstance(widget, QCheckBox):
+                widget.setChecked(self.settings.value(key, defaultValue, type(defaultValue)))
 
     def saveSettings(self) -> None:
-        if self.songIdSelector.count() > 1:
-            self.settings.setValue('songId', self.songIdSelector.currentText())
-        if self.difficultySelector.count() > 1:
-            self.settings.setValue('difficulty', self.difficultySelector.currentText())
-        self.settings.setValue('algorithm', self.algorithmSelectorTabs.currentIndex())
-        self.settings.setValue('algo1FlickStart', self.algo1FlickStart.value())
-        self.settings.setValue('algo1FlickEnd', self.algo1FlickEnd.value())
-        self.settings.setValue('algo1FlickDirection', self.algo1FlickDirection.checkedId())
-        self.settings.setValue('algo2FlickStart', self.algo2FlickStart.value())
-        self.settings.setValue('algo2FlickEnd', self.algo2FlickEnd.value())
-        self.settings.setValue('algo2FlickDirection', self.algo2FlickDirection.checkedId())
-        self.settings.setValue('customChartPath', self.customChartPath.text())
-        self.settings.setValue('preferCache', self.preferCache.isChecked())
-        self.settings.setValue('syncMode', self.syncModeSelector.checkedId())
-        self.settings.setValue('delay', self.delayInput.value())
-        self.settings.setValue('aspectRatio', self.aspectRatioSelector.checkedId())
-        self.settings.setValue('saveCache', self.saveResult.isChecked())
+        for key, info in self.SETTINGS.items():
+            if isinstance(info, tuple):
+                widgetName = info[0]
+            else:
+                widgetName = key
+            widget = getattr(self, widgetName)
+            if isinstance(widget, QComboBox):
+                if widget.count() > 1:
+                    self.settings.setValue(key, widget.currentText())
+            elif isinstance(widget, QTabWidget):
+                self.settings.setValue(key, widget.currentIndex())
+            elif isinstance(widget, QSpinBox):
+                self.settings.setValue(key, widget.value())
+            elif isinstance(widget, QButtonGroup):
+                self.settings.setValue(key, widget.checkedId())
+            elif isinstance(widget, QLineEdit):
+                self.settings.setValue(key, widget.text())
+            elif isinstance(widget, QCheckBox):
+                self.settings.setValue(key, widget.isChecked())
 
     def askCustomChart(self) -> None:
         filepath, sel = QFileDialog.getOpenFileName(
@@ -525,6 +555,16 @@ class MainWindow(QWidget):
                 chart = PecChart(content)
         return content, chart
 
+    def getAlgorithmConfigureDict(self) -> AlgorithmConfigure:
+        return AlgorithmConfigure(
+            algo1_flick_start=self.algo1FlickStart.value(),
+            algo1_flick_end=self.algo1FlickEnd.value(),
+            algo1_flick_direction=self.algo1FlickDirection.checkedId(),
+            algo2_flick_start=self.algo2FlickStart.value(),
+            algo2_flick_end=self.algo2FlickEnd.value(),
+            algo2_flick_direction=self.algo2FlickDirection.checkedId(),
+        )
+
     def process(self) -> None:
         self.saveSettings()
         self.testButton.setDisabled(True)
@@ -537,15 +577,7 @@ class MainWindow(QWidget):
                 import algo.algo1 as algo
             else:
                 import algo.algo2 as algo
-            config = {
-                'algo1_flick_start': self.algo1FlickStart.value(),
-                'algo1_flick_end': self.algo1FlickEnd.value(),
-                'algo1_flick_direction': self.algo1FlickDirection.checkedId(),
-                'algo2_flick_start': self.algo2FlickStart.value(),
-                'algo2_flick_end': self.algo2FlickEnd.value(),
-                'algo2_flick_direction': self.algo2FlickDirection.checkedId(),
-            }
-            screen, ans = algo.solve(chart, config, self.console)
+            screen, ans = algo.solve(chart, self.getAlgorithmConfigureDict(), self.console)
             if self.saveResult.isChecked():
                 self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
             box = QMessageBox(self)
@@ -601,15 +633,7 @@ class MainWindow(QWidget):
                 import algo.algo1 as algo
             else:
                 import algo.algo2 as algo
-            config = {
-                'algo1_flick_start': self.algo1FlickStart.value(),
-                'algo1_flick_end': self.algo1FlickEnd.value(),
-                'algo1_flick_direction': self.algo1FlickDirection.checkedId(),
-                'algo2_flick_start': self.algo2FlickStart.value(),
-                'algo2_flick_end': self.algo2FlickEnd.value(),
-                'algo2_flick_direction': self.algo2FlickDirection.checkedId(),
-            }
-            screen, ans = algo.solve(chart, config, self.console)
+            screen, ans = algo.solve(chart, self.getAlgorithmConfigureDict(), self.console)
             self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
 
         assert self.controller is not None

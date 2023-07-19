@@ -1,7 +1,7 @@
 # 指针规划算法的基类和一些实用类型、函数
 from typing import Self
 from enum import Enum
-from typing import NamedTuple, TypeAlias
+from typing import NamedTuple, TypeAlias, TypedDict
 from io import BytesIO
 import struct
 
@@ -172,6 +172,15 @@ def load_data(content: bytes) -> tuple[ScreenUtil, RawAnswerType]:
         (length,) = struct.unpack('!b', reader.read(1))
         ans.append((ts, [VirtualTouchEvent.from_serializable(reader.read(21)) for _ in range(length)]))
     return ScreenUtil(width, height), ans
+
+
+class AlgorithmConfigure(TypedDict):
+    algo1_flick_start: int
+    algo1_flick_end: int
+    algo1_flick_direction: int
+    algo2_flick_start: int
+    algo2_flick_end: int
+    algo2_flick_direction: int
 
 
 __all__ = ['TouchAction', 'VirtualTouchEvent', 'TouchEvent', 'distance_of', 'ScreenUtil']

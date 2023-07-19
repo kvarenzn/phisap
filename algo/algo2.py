@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from collections import defaultdict
 
 from basis import Chart, NoteType, Position, Vector
-from .algo_base import TouchAction, VirtualTouchEvent, ScreenUtil, AnswerType, RawAnswerType
+from .algo_base import TouchAction, VirtualTouchEvent, ScreenUtil, RawAnswerType, AlgorithmConfigure
 
 
 from rich.console import Console
@@ -212,7 +212,7 @@ class PointerAllocator:
         return [(ts, events) for ts, events in sorted(self.events.items())]
 
 
-def solve(chart: Chart, config: dict, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
+def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
     flick_start = config['algo2_flick_start']
     flick_end = config['algo2_flick_end']
     flick_direction = config['algo2_flick_direction']
