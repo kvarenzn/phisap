@@ -414,19 +414,20 @@ class MainWindow(QWidget):
                 widgetName = key
                 defaultValue = info
             widget = getattr(self, widgetName)
-            if isinstance(widget, QComboBox):
-                if widget.count() > 1:
-                    widget.setCurrentText(self.settings.value(key, defaultValue or widget.currentText(), str))
-            elif isinstance(widget, QTabWidget):
-                widget.setCurrentIndex(self.settings.value(key, defaultValue, type(defaultValue)))
-            elif isinstance(widget, QSpinBox):
-                widget.setValue(self.settings.value(key, defaultValue, type(defaultValue)))
-            elif isinstance(widget, QButtonGroup):
-                widget.button(self.settings.value(key, defaultValue, type(defaultValue))).setChecked(True)
-            elif isinstance(widget, QLineEdit):
-                widget.setText(self.settings.value(key, defaultValue, type(defaultValue)))
-            elif isinstance(widget, QCheckBox):
-                widget.setChecked(self.settings.value(key, defaultValue, type(defaultValue)))
+            match widget:
+                case QComboBox():
+                    if widget.count() > 1:
+                        widget.setCurrentText(self.settings.value(key, defaultValue or widget.currentText(), str))
+                case QTabWidget():
+                    widget.setCurrentIndex(self.settings.value(key, defaultValue, type(defaultValue)))
+                case QSpinBox():
+                    widget.setValue(self.settings.value(key, defaultValue, type(defaultValue)))
+                case QButtonGroup():
+                    widget.button(self.settings.value(key, defaultValue, type(defaultValue))).setChecked(True)
+                case QLineEdit():
+                    widget.setText(self.settings.value(key, defaultValue, type(defaultValue)))
+                case QCheckBox():
+                    widget.setChecked(self.settings.value(key, defaultValue, type(defaultValue)))
 
     def saveSettings(self) -> None:
         for key, info in self.SETTINGS.items():
@@ -435,19 +436,20 @@ class MainWindow(QWidget):
             else:
                 widgetName = key
             widget = getattr(self, widgetName)
-            if isinstance(widget, QComboBox):
-                if widget.count() > 1:
-                    self.settings.setValue(key, widget.currentText())
-            elif isinstance(widget, QTabWidget):
-                self.settings.setValue(key, widget.currentIndex())
-            elif isinstance(widget, QSpinBox):
-                self.settings.setValue(key, widget.value())
-            elif isinstance(widget, QButtonGroup):
-                self.settings.setValue(key, widget.checkedId())
-            elif isinstance(widget, QLineEdit):
-                self.settings.setValue(key, widget.text())
-            elif isinstance(widget, QCheckBox):
-                self.settings.setValue(key, widget.isChecked())
+            match widget:
+                case QComboBox():
+                    if widget.count() > 1:
+                        self.settings.setValue(key, widget.currentText())
+                case QTabWidget():
+                    self.settings.setValue(key, widget.currentIndex())
+                case QSpinBox():
+                    self.settings.setValue(key, widget.value())
+                case QButtonGroup():
+                    self.settings.setValue(key, widget.checkedId())
+                case QLineEdit():
+                    self.settings.setValue(key, widget.text())
+                case QCheckBox():
+                    self.settings.setValue(key, widget.isChecked())
 
     def askCustomChart(self) -> None:
         filepath, sel = QFileDialog.getOpenFileName(
