@@ -48,7 +48,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.13'
+PHISAP_VERSION = '0.14'
 
 
 class ExtractPackageWorker(QThread):
@@ -183,9 +183,14 @@ class MainWindow(QWidget):
     algo1FlickStart: QSpinBox
     algo1FlickEnd: QSpinBox
     algo1FlickDirection: QButtonGroup
+    algo1SampleDelay: QSpinBox
+    algo1TargetScore: QSpinBox
+    algo1StrictMode: QCheckBox
     algo2FlickStart: QSpinBox
     algo2FlickEnd: QSpinBox
     algo2FlickDirection: QButtonGroup
+    algo2TargetScore: QSpinBox
+    algo2StrictMode: QCheckBox
 
     preferCache: QCheckBox
     mainModeSelectTabs: QTabWidget
@@ -201,16 +206,21 @@ class MainWindow(QWidget):
 
     settings: QSettings
 
-    SETTINGS: dict[str, tuple[str, typing.Any] | typing.Any] = {
+    SETTINGS: dict[str, tuple[str, typing.Any] | int | float | bool | str] = {
         'songId': ('songIdSelector', None),
         'difficulty': ('difficultySelector', None),
         'algorithm': ('algorithmSelectorTabs', 0),
         'algo1FlickStart': -17,
         'algo1FlickEnd': 17,
         'algo1FlickDirection': 0,
+        'algo1SampleDelay': 1,
+        'algo1TargetScore': 1000000,
+        'algo1StrictMode': False,
         'algo2FlickStart': -17,
         'algo2FlickEnd': 17,
         'algo2FlickDirection': 1,
+        'algo2TargetScore': 1000000,
+        'algo2StrictMode': False,
         'customChartPath': '',
         'preferCache': True,
         'syncMode': ('syncModeSelector', 0),
@@ -284,7 +294,7 @@ class MainWindow(QWidget):
         self.algorithmSelectorTabs = QTabWidget()
         self.mainLayout.addWidget(self.algorithmSelectorTabs)
         algo1ConfigView = QWidget()
-        self.algorithmSelectorTabs.addTab(algo1ConfigView, self.tr('Conserv Algo'))
+        self.algorithmSelectorTabs.addTab(algo1ConfigView, self.tr('Conserv algo'))
         algo1ConfigViewLayout = QVBoxLayout()
         algo1ConfigView.setLayout(algo1ConfigViewLayout)
         line1 = QHBoxLayout()
@@ -304,7 +314,7 @@ class MainWindow(QWidget):
         line3 = QHBoxLayout()
         algo1ConfigViewLayout.addLayout(line3)
         self.algo1FlickDirection = QButtonGroup()
-        line3.addWidget(QLabel(text=self.tr('Flick Direction:')))
+        line3.addWidget(QLabel(text=self.tr('Flick direction:')))
         direc1 = QRadioButton(text=self.tr('Perpend. to'))
         direc2 = QRadioButton(text=self.tr('Parallel to'))
         line3.addWidget(direc1)
@@ -312,9 +322,26 @@ class MainWindow(QWidget):
         self.algo1FlickDirection.addButton(direc1, id=0)
         self.algo1FlickDirection.addButton(direc2, id=1)
         direc1.setChecked(True)
+        line31 = QHBoxLayout()
+        algo1ConfigViewLayout.addLayout(line31)
+        line31.addWidget(QLabel(text=self.tr('Sample delay:')))
+        self.algo1SampleDelay = QSpinBox()
+        self.algo1SampleDelay.setRange(1, 17)
+        line31.addWidget(self.algo1SampleDelay)
+        line31.addWidget(QLabel(text=self.tr('ms')))
+        line4 = QHBoxLayout()
+        algo1ConfigViewLayout.addLayout(line4)
+        self.algo1TargetScore = QSpinBox()
+        self.algo1TargetScore.setRange(0, 1000000)
+        self.algo1TargetScore.setDisabled(True)
+        line4.addWidget(QLabel(text=self.tr('Target score:')))
+        line4.addWidget(self.algo1TargetScore)
+        self.algo1StrictMode = QCheckBox(text=self.tr('Strict'))
+        self.algo1StrictMode.setDisabled(True)
+        line4.addWidget(self.algo1StrictMode)
 
         algo2ConfigView = QWidget()
-        self.algorithmSelectorTabs.addTab(algo2ConfigView, self.tr('Radical Algo'))
+        self.algorithmSelectorTabs.addTab(algo2ConfigView, self.tr('Radical algo'))
         algo2ConfigViewLayout = QVBoxLayout()
         algo2ConfigView.setLayout(algo2ConfigViewLayout)
         line1 = QHBoxLayout()
@@ -334,7 +361,7 @@ class MainWindow(QWidget):
         line3 = QHBoxLayout()
         algo2ConfigViewLayout.addLayout(line3)
         self.algo2FlickDirection = QButtonGroup()
-        line3.addWidget(QLabel(text=self.tr('Flick Direction:')))
+        line3.addWidget(QLabel(text=self.tr('Flick direction:')))
         direc1 = QRadioButton(text=self.tr('Perpend. to'))
         direc2 = QRadioButton(text=self.tr('Parallel to'))
         line3.addWidget(direc1)
@@ -342,6 +369,16 @@ class MainWindow(QWidget):
         self.algo2FlickDirection.addButton(direc1, id=0)
         self.algo2FlickDirection.addButton(direc2, id=1)
         direc1.setChecked(True)
+        line4 = QHBoxLayout()
+        algo2ConfigViewLayout.addLayout(line4)
+        self.algo2TargetScore = QSpinBox()
+        self.algo2TargetScore.setRange(0, 1000000)
+        self.algo2TargetScore.setDisabled(True)
+        line4.addWidget(QLabel(text=self.tr('Target score:')))
+        line4.addWidget(self.algo2TargetScore)
+        self.algo2StrictMode = QCheckBox(text=self.tr('Strict'))
+        self.algo2StrictMode.setDisabled(True)
+        line4.addWidget(self.algo2StrictMode)
 
         self.mainModeSelectTabs = QTabWidget()
         self.mainLayout.addWidget(self.mainModeSelectTabs)
@@ -562,9 +599,14 @@ class MainWindow(QWidget):
             algo1_flick_start=self.algo1FlickStart.value(),
             algo1_flick_end=self.algo1FlickEnd.value(),
             algo1_flick_direction=self.algo1FlickDirection.checkedId(),
+            algo1_sample_delay=self.algo1SampleDelay.value(),
+            algo1_target_score=self.algo1TargetScore.value(),
+            algo1_strict_mode=self.algo1StrictMode.isChecked(),
             algo2_flick_start=self.algo2FlickStart.value(),
             algo2_flick_end=self.algo2FlickEnd.value(),
             algo2_flick_direction=self.algo2FlickDirection.checkedId(),
+            algo2_target_score=self.algo2TargetScore.value(),
+            algo2_strict_mode=self.algo2StrictMode.isChecked()
         )
 
     def process(self) -> None:

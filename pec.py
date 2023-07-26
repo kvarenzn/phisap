@@ -190,32 +190,4 @@ class PecChart(Chart):
         # ignore opacity setting event
         pass
 
-
-if __name__ == '__main__':
-    # 测试
-    pec = PecChart(open('../../test/phira/2555/FREEDOM DiVE.pec').read())
-    import pygame
-
-    pygame.init()
-    screen = pygame.display.set_mode((2048 / 2, 1400 / 2))
-    clock = pygame.time.Clock()
-    running = True
-
-    seconds = 0
-
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-        screen.fill('black')
-        pos = pec.lines[0].position @ seconds / 2
-        angle = cmath.exp(pec.lines[0].angle @ seconds * 1j)
-        left = pos + angle * 3500
-        right = pos - angle * 3500
-        print(seconds)
-        pygame.draw.circle(screen, 'white', (pos.real, pos.imag), 10)
-        pygame.draw.line(screen, 'white', (left.real, left.imag), (right.real, right.imag), 4)
-        pygame.display.flip()
-        seconds += clock.tick(60) / 1000
-    pygame.quit()
+__all__ = ['PecChart']

@@ -11,7 +11,7 @@ from itertools import chain
 from collections import defaultdict
 from enum import Enum
 
-from .algo_base import RawAnswerType, TouchAction, VirtualTouchEvent, distance_of, ScreenUtil, AlgorithmConfigure
+from .algo_base import RawAnswerType, TouchAction, VirtualTouchEvent, distance_of, ScreenUtil, AlgorithmConfigure, preprocess
 
 from basis import Chart, NoteType, Position, Vector
 
@@ -139,6 +139,9 @@ class PointerManager:
 
 
 def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
+    # 根据目标分数要求预处理谱面
+    chart = preprocess(chart, config['algo1_target_score'], config['algo1_strict_mode'])
+    
     # 获得虚拟屏幕的尺寸数据
     screen = ScreenUtil(chart.screen_width, chart.screen_height)
 
@@ -148,6 +151,8 @@ def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[S
     flick_start = config['algo1_flick_start']
     flick_end = config['algo1_flick_end']
     flick_duration = flick_end - flick_start
+
+    sample_delay = config['algo1_sample_delay']
 
     # 帧数据，每一帧都是note被击打时的快照
     # 保存当时所有(比如多押的时候)被击打note的必要数据，如类型，位置，方向等
@@ -249,7 +254,7 @@ def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[S
                             current_note_id,
                         )
                     )
-                    for offset in range(flick_start + 1, flick_end, 8):
+                    for offset in range(flick_start + 1, flick_end, sample_delay):
                         frames[timestamp + offset].append(
                             SemiNote(
                                 SemiNoteType.FLICK,
@@ -272,7 +277,7 @@ def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[S
                     frames[timestamp].append(
                         SemiNote(SemiNoteType.HOLD_START, screen.remap(note_pos, rotation), current_note_id)
                     )
-                    for offset in range(1, hold_ms, 8):
+                    for offset in range(1, hold_ms, sample_delay):
                         new_time = (timestamp + offset) / 1000
                         angle = line.angle @ new_time
                         frames[timestamp + offset].append(

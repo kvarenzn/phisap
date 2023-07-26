@@ -153,7 +153,7 @@ class PointerAllocator:
         angle = note.angle
         note_pos = 0j
         pos = self.screen.remap(note.pos, angle)
-        for delta in range(self.flick_duration, 8):
+        for delta in range(self.flick_duration):
             rate = 1 - 2 * delta / self.flick_duration
             note_pos = pos + angle * self.flick_rotate_factor * rate * self.screen.flick_radius
             self._insert(self.now + delta, VirtualTouchEvent(note_pos, TouchAction.MOVE, pointer.id))
@@ -229,7 +229,7 @@ def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[S
                 case NoteType.HOLD:
                     hold_ms = math.ceil(note.hold * 1000)
                     frames[ms].add(NoteType.TAP, pos, angle)
-                    for offset in range(1, hold_ms + 1, 8):
+                    for offset in range(1, hold_ms + 1):
                         time = (ms + offset) / 1000
                         angle = cmath.exp(line.angle @ time * 1j)
                         frames[ms + offset].add(NoteType.DRAG, line.pos(time, note.offset), angle)

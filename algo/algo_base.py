@@ -1,11 +1,82 @@
 # 指针规划算法的基类和一些实用类型、函数
-from typing import Self
+from collections import defaultdict
+from typing import Any, Self
 from enum import Enum
 from typing import NamedTuple, TypeAlias, TypedDict
 from io import BytesIO
 import struct
 
-from basis import Position, Vector
+from z3 import Int, Solver, unsat
+
+from basis import Position, Vector, Chart, JudgeLine, Note
+
+class NoteFeedback(Enum):
+    PERFECT = 0
+    GOOD = 1
+    MISS = 2
+
+class NoteRef(NamedTuple):
+    ref: Note
+    line: JudgeLine
+    feedback: NoteFeedback = NoteFeedback.PERFECT
+
+
+def calc_score(total: int, target_score: int, strict: bool) -> tuple[int, int, int, int] | None:
+    perfect = Int('perfect')
+    good = Int('good')
+    miss = Int('miss')
+    combo = Int('combo')
+    solver = Solver()
+    solver.add(perfect >= 0)
+    solver.add(good >= 0)
+    solver.add(miss >= 0)
+    solver.add(combo >= 1)
+    solver.add(perfect + good + miss == total)
+    solver.add(combo <= perfect + good)
+    solver.add(combo * (miss + 1) >= perfect + good)
+    f: Any
+    if strict:
+        f = (perfect + 0.65 * good) / total * 1000000
+    else:
+        f = (perfect + 0.65 * good) / total * 900000 + combo / total * 100000  # type: ignore
+    solver.add(f >= target_score)
+    solver.add(f < target_score + 1)
+    if solver.check() == unsat:
+        return
+    else:
+        model = solver.model()
+        return model[perfect].as_long(), model[good].as_long(), model[miss].as_long(), model[combo].as_long() # type: ignore
+
+
+def preprocess(chart: Chart, target_score: int, strict: bool) -> Chart:
+    if target_score == 0:
+        chart.lines.clear()
+        return chart
+    elif target_score == 1000000:
+        return chart
+    linear_chart: defaultdict[float, list[NoteRef]] = defaultdict(list)
+    total = 0
+    for line in chart.lines:
+        for note in line.notes:
+            total += 1
+            linear_chart[note.seconds].append(NoteRef(note, line))
+    result = calc_score(total, target_score, strict)
+    if result is None:
+        print(f'failed: unable to gather the specified score {target_score}')
+        for i in range(1, 500001):
+            for fact in (-1, 1):
+                delta = i * fact
+                score = target_score + delta
+                if not (0 <= score <= 1000000):
+                    continue
+                result = calc_score(total, target_score, strict)
+                if result is not None:
+                    print(f'found an approximate score that can be obtained: {score}')
+                    break
+    assert result is not None
+    perfect, good, miss, combo = result
+    not_bad = perfect + good
+    return chart
 
 
 def distance_of(p1: Position, p2: Position) -> float:
@@ -178,9 +249,14 @@ class AlgorithmConfigure(TypedDict):
     algo1_flick_start: int
     algo1_flick_end: int
     algo1_flick_direction: int
+    algo1_sample_delay: int
+    algo1_target_score: int
+    algo1_strict_mode: bool
     algo2_flick_start: int
     algo2_flick_end: int
     algo2_flick_direction: int
+    algo2_target_score: int
+    algo2_strict_mode: bool
 
 
 __all__ = ['TouchAction', 'VirtualTouchEvent', 'TouchEvent', 'distance_of', 'ScreenUtil']
