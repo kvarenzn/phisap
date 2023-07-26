@@ -60,7 +60,9 @@ class DeviceController:
             server_version,
             f'scid={self.session_id}',
             'log_level=info',
+            'video_codec=h264',
             'audio=false',
+            'video_encoder=OMX.google.h264.encoder',
             'clipboard_autosync=false',
         ]
         self.server_process = subprocess.Popen(command_line)

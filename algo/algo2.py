@@ -4,7 +4,7 @@
 # 这样就可以用单个事件触发多个note的判定
 # 此外，尽量最小幅度地移动指针
 
-# 将flick视作一堆drag，将hold视作tap+一堆drag
+# 将hold视作tap+一堆drag，也就是说，实际上激进算法规划的谱面中没有hold
 
 import math
 import cmath
