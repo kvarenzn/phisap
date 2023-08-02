@@ -9,6 +9,11 @@ PHIgros(-like) Semi-Automatic Player
 
 ![最高支持](https://img.shields.io/badge/最高支持-Phigros%203.1.1.1-blue.svg)
 
+你现在所在的分支为`dev`，包含最新的更新内容，不过不保证一定可用，因此不推荐普通用户使用
+
+如果想切换回旧版phisap所在分支，[请点这里](https://github.com/kvarenzn/phisap/tree/stable)
+
+本分支的更新仅在以下环境上测试过：PC OS: archlinux x64，游戏设备: OnePlus 7 Pro，氢OS 10.0.10.GM21
 </div>
 
 ## 目录
@@ -226,6 +231,9 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 WTFPL
 
 ## 更新日志
+
+### (2023/08/02)
+- 拆分`main`分支为`stable`和`dev`
 
 ### (2023/07/26) v0.14
 - 上次更新后许多(>2)人开issue称激进算法报废了，现作出如下改动
