@@ -1,7 +1,7 @@
 <div align="center">
 
 <p align="center">
-    <img src="./assets/img/phisap.png" alt="phisap">
+    <img src="./public/img/phisap.png" alt="phisap">
 </p>
 
 # phisap
@@ -55,7 +55,7 @@
 
 ## 程序界面
 
-![Phisap截图](./assets/img/screenshots/phisap_interface.png)
+![Phisap截图](./public/img/screenshots/phisap_interface.png)
 
 - 注：这张图是在arch linux上截的，Qt的样式设置为Kvantum，依赖GTK的Materia Dark主题
 - 注2: 截图的更新可能并不及时，请以实际的运行结果为止
@@ -65,9 +65,9 @@
 <details>
 <summary>两张手机截图</summary>
 
-![AT Complete](./assets/img/screenshots/phone-shot1.jpg)
+![AT Complete](./public/img/screenshots/phone-shot1.jpg)
 
-![IN Complete](./assets/img/screenshots/phone-shot2.jpg)
+![IN Complete](./public/img/screenshots/phone-shot2.jpg)
 
 </details>
 
@@ -153,7 +153,7 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 - DESTRUCTION 3,2,1 (AT16)
 
 也就是下面这三个，顺序任意
-![推荐彩48配置](./assets/img/screenshots/phone-shot3.jpg)
+![推荐彩48配置](./public/img/screenshots/phone-shot3.jpg)
 这三个谱面的特点是开局没有过分的判定线演出，便于手动同步定时器，同时相比于其他 AT16，这三个谱面在课题模式下也算是判定比较宽松的
 
 然后按照如下步骤操作 phisap
