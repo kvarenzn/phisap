@@ -11,6 +11,8 @@
 **仅支持安卓设备**
 
 ![最高支持](https://img.shields.io/badge/最高支持-Phigros%203.1.1.1-blue.svg)
+
+_phisap的图标由[@ShintoKosei](https://github.com/ShintoKosei)制作，授权给phisap项目使用，ShintoKosei保留所有权利_
 </div>
 
 ---
@@ -83,7 +85,7 @@
         + 使用`adb pull`或者文件管理器直接复制出来即可
     + 当然，如果你不想手动提取，也可以直接去网上下载一个phigros的安装包或数据包，注意版本对应即可
 4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v2.0`，不要下载成别的版本。下载完成后，请将文件直接放置在phisap的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则phisap将无法识别。
-    + 如果你使用*nix系统，且安装有wget，那么V下面的命令与上面描述的操作等效:
+    + 如果你使用*nix系统，且安装有wget，那么下面这段命令与上面描述的操作等效:
         ```bash
         cd phisap  # 定位到phisap的根目录下
         wget https://github.com/Genymobile/scrcpy/releases/download/v2.0/scrcpy-server-v2.0
@@ -179,8 +181,13 @@ phisap并没有对课题模式做特殊的支持，将来也许会有
 
 感谢上述优秀的项目和创造或维护它们的个人或企业。
 
++ 感谢@ShintoKosei为phisap设计并制作了图标、美化了README的排版
+
 ## 开源许可
-WTFPL
+
+除图标(`public/img/phisap_s.png`和`public/img/Phisap.png`)外，phisap的其他内容以WTFPL协议开源
+
+图标仅限phisap项目本身使用，其他任何人或团体不得以任何方式使用，原作者 @ShintoKosei 保留所有权利
 
 ## 更新日志
 ### (2023/08/02)
