@@ -1,20 +1,28 @@
 <div align="center">
-<h1 align="center">phisap</h1>
 
-PHIgros(-like) Semi-Automatic Player
+<p align="center">
+    <img src="./assets/img/phisap.png" alt="phisap">
+</p>
 
-适用于(类)Phigros音游的半自动打歌器
+# phisap
+<ins>PHI</ins>gros(-like) <ins>S</ins>emi-<ins>A</ins>utomatic <ins>P</ins>layer
 
-仅支持安卓设备
+✨ 适用于(类)Phigros音游的半自动打歌器 ✨
+
+**仅支持安卓设备**
 
 ![最高支持](https://img.shields.io/badge/最高支持-Phigros%203.1.1.1-blue.svg)
 
+</div>
+
+---
+
 你现在所在的分支为`dev`，包含最新的更新内容，不过不保证一定可用，因此不推荐普通用户使用
 
-如果想切换回旧版phisap所在分支，[请点这里](https://github.com/kvarenzn/phisap/tree/stable)
+如果想切换回旧版phisap所在分支，[请点击这里返回](https://github.com/kvarenzn/phisap/tree/stable)
 
 本分支的更新仅在以下环境上测试过：PC OS: archlinux x64，游戏设备: OnePlus 7 Pro，氢OS 10.0.10.GM21
-</div>
+
 
 ## 目录
 
@@ -47,7 +55,7 @@ PHIgros(-like) Semi-Automatic Player
 
 ## 程序界面
 
-![Phisap截图](./screenshots/phisap.png)
+![Phisap截图](./assets/img/screenshots/phisap_interface.png)
 
 - 注：这张图是在arch linux上截的，Qt的样式设置为Kvantum，依赖GTK的Materia Dark主题
 - 注2: 截图的更新可能并不及时，请以实际的运行结果为止
@@ -57,9 +65,9 @@ PHIgros(-like) Semi-Automatic Player
 <details>
 <summary>两张手机截图</summary>
 
-![AT Complete](./screenshots/phone-shot1.jpg)
+![AT Complete](./assets/img/screenshots/phone-shot1.jpg)
 
-![IN Complete](./screenshots/phone-shot2.jpg)
+![IN Complete](./assets/img/screenshots/phone-shot2.jpg)
 
 </details>
 
@@ -145,7 +153,7 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 - DESTRUCTION 3,2,1 (AT16)
 
 也就是下面这三个，顺序任意
-![推荐彩48配置](./screenshots/phone-shot3.jpg)
+![推荐彩48配置](./assets/img/screenshots/phone-shot3.jpg)
 这三个谱面的特点是开局没有过分的判定线演出，便于手动同步定时器，同时相比于其他 AT16，这三个谱面在课题模式下也算是判定比较宽松的
 
 然后按照如下步骤操作 phisap
