@@ -13,6 +13,8 @@
 
 ![最高支持](https://img.shields.io/badge/最高支持-Phigros%203.1.1.1-blue.svg)
 
+_phisap的图标由[@ShintoKosei](https://github.com/ShintoKosei)制作，授权给phisap项目使用，ShintoKosei保留所有权利_
+
 </div>
 
 ---
@@ -234,9 +236,13 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 
 感谢上述优秀的项目和创造或维护它们的个人或企业。
 
+- 感谢@ShintoKosei为phisap设计并制作了图标、美化了README的排版
+
 ## 开源许可
 
-WTFPL
+除图标(`public/img/phisap_s.png`和`public/img/Phisap.png`)外，phisap的其他内容以WTFPL协议开源
+
+图标仅限phisap项目本身使用，其他任何人或团体不得以任何方式使用，原作者 @ShintoKosei 保留所有权利
 
 ## 更新日志
 
