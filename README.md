@@ -1,7 +1,7 @@
 <div align="center">
 
 <p align="center">
-    <img src="./public/img/phisap.png" alt="phisap">
+    <img src="./public/img/Phisap.png" alt="phisap">
 </p>
 
 # phisap
