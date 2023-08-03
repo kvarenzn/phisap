@@ -1,13 +1,22 @@
 <div align="center">
-<h1 align="center">phisap</h1>
+<p align="center">
+    <img src="./public/img/Phisap.png" alt="phisap">
+</p>
 
-PHIgros Semi-Automatic Player
+# phisap
+<ins>PHI</ins>gros(-like) <ins>S</ins>emi-<ins>A</ins>utomatic <ins>P</ins>layer
 
-适用于音游Phigros的半自动打歌器，仅支持安卓设备
+✨ 适用于(类)Phigros音游的半自动打歌器 ✨
+
+**仅支持安卓设备**
 
 ![最高支持](https://img.shields.io/badge/最高支持-Phigros%203.1.1.1-blue.svg)
+</div>
 
-你现在所在的分支为`stable`，该分支目前仅包含2023/06/28以前的更新内容，如果你想体验此后的更新，请[切换到dev分支](https://github.com/kvarenzn/phisap/tree/dev)
+---
+你现在所在的分支为`stable`，该分支目前仅包含2023/06/28以前的更新内容
+
+如果你想体验此后的更新，请[切换到dev分支](https://github.com/kvarenzn/phisap/tree/dev)
 
 </div>
 
@@ -43,9 +52,9 @@ PHIgros Semi-Automatic Player
 <details>
 <summary>两张手机截图</summary>
 
-![AT Complete](./screenshots/phone-shot1.jpg)
+![AT Complete](./public/img/screenshots/phone-shot1.jpg)
 
-![IN Complete](./screenshots/phone-shot2.jpg)
+![IN Complete](./public/img/screenshots/phone-shot2.jpg)
 
 </details>
 
@@ -74,7 +83,7 @@ PHIgros Semi-Automatic Player
         + 使用`adb pull`或者文件管理器直接复制出来即可
     + 当然，如果你不想手动提取，也可以直接去网上下载一个phigros的安装包或数据包，注意版本对应即可
 4. 准备服务端。请去[scrcpy的releases页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v2.0`，不要下载成别的版本。下载完成后，请将文件直接放置在phisap的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则phisap将无法识别。
-    + 如果你使用*nix系统，且安装有wget，那么下面的命令与上面描述的操作等效:
+    + 如果你使用*nix系统，且安装有wget，那么V下面的命令与上面描述的操作等效:
         ```bash
         cd phisap  # 定位到phisap的根目录下
         wget https://github.com/Genymobile/scrcpy/releases/download/v2.0/scrcpy-server-v2.0
@@ -127,7 +136,7 @@ phisap并没有对课题模式做特殊的支持，将来也许会有
 + DESTRUCTION 3,2,1 (AT16)
 
 也就是下面这三个，顺序任意
-![推荐彩48配置](./screenshots/phone-shot3.jpg)
+![推荐彩48配置](./public/img/screenshots/phone-shot3.jpg)
 这三个谱面的特点是开局没有过分的判定线演出，便于手动同步定时器，同时相比于其他AT16，这三个谱面在课题模式下也算是判定比较宽松的
 
 然后按照如下步骤操作phisap
