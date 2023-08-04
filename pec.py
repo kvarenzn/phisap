@@ -84,7 +84,7 @@ class PecChart(Chart):
         self.judge_lines = defaultdict(lambda: PecJudgeLine(chart=self))
 
         # 将pec格式的内容转换为python代码，让python解释器帮助我们解析执行
-        content = re.sub(r'''["'+eghijkloqstuwxyzA-Z*/]''', '', content)  # 避免不必要的麻烦
+        content = re.sub(r'''["'+eghijkloqstuwxyzA-Z*/\\]''', '', content)  # 避免不必要的麻烦
         content = (
             '\n'.join(
                 re.sub(r'\s+', ' ', line.strip()).replace(' ', '(', 1).replace(' ', ',') + ')'
