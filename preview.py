@@ -260,6 +260,7 @@ class VisualPecJudgeLine(VisualJudgeLine):
                 )
             )
 
+
 class VisualPecChart(VisualChart):
     _NOTE_TYPES = [NoteType.UNKNOWN, NoteType.TAP, NoteType.HOLD, NoteType.FLICK, NoteType.DRAG]
     _SPEED_FACTOR = 700 / 5.85
@@ -272,7 +273,7 @@ class VisualPecChart(VisualChart):
         self.notes = defaultdict(list)
         self.lines_map = defaultdict(VisualPecJudgeLine)
 
-        content = re.sub(r'''["'+eghijkloqstuwxyzA-Z*/\\]''', '', content)  # 避免不必要的麻烦
+        content = re.sub(r'''["'+eghijkloqstuwxyzA-Z*/\\]''', '', content)
         content = (
             '\n'.join(
                 re.sub(r'\s+', ' ', line.strip()).replace(' ', '(', 1).replace(' ', ',') + ')'
@@ -329,10 +330,6 @@ class VisualPecChart(VisualChart):
         self.bpss.append(PecBpsInfo(seconds_passed, beats, bps))
 
     def _beats_to_seconds(self, beats: float) -> float:
-        # 通常来讲，bpm事件列表的长度一般小于100
-        # 所以理论上逆序遍历足够了
-        # 应该没有必要设计高级的数据结构
-        # 再说了，都用python了那还要啥自行车
         for seconds, beats_begin, bps in reversed(self.bpss):
             if beats >= beats_begin:
                 return seconds + (beats - beats_begin) / bps
@@ -380,53 +377,52 @@ class VisualPecChart(VisualChart):
         self.lines_map[line_number].opacity.embed(start, end, value / 255, RPE_EASING_FUNCS[0])
 
 
-def render(chart: VisualChart, time: float) -> Generator[VisualLineItem | VisualNoteItem, Any, None]:
-    for line in chart.lines:
-        position = line.position @ time
-        rotation = cmath.exp(complex(imag=line.rotation @ time))
-        yield VisualLineItem(position, rotation, line.opacity @ time)
-        for note in line.notes:
-            if time > note.time + note.hold or time < note.time + note.hold - 50:
-                continue
-
-            height = note.floor - line.floor @ time
-            if not note.above:
-                height = -height
-
-            if note.type == NoteType.HOLD:
-                if time <= note.time:
-                    note_height = note.speed * note.hold
-                    if not note.above:
-                        note_height = -note_height
-                    yield VisualNoteItem(
-                        note.type, position + (note.offset + height * 1j) * rotation, rotation, note_height
-                    )
-                else:
-                    note_height = note.speed * (note.hold + note.time - time)
-                    if not note.above:
-                        note_height = -note_height
-                    yield VisualNoteItem(
-                        note.type,
-                        position + note.offset * rotation,
-                        rotation,
-                        note_height,
-                    )
-            else:
-                yield VisualNoteItem(note.type, position + (note.offset + height * 1j) * rotation, rotation, 0)
-
-
 if __name__ == '__main__':
     import pyglet
     from pyglet.window import key
     import time
     import json
 
+    def render_chart(chart: VisualChart, time: float) -> Generator[VisualLineItem | VisualNoteItem, Any, None]:
+        for line in chart.lines:
+            position = line.position @ time
+            rotation = cmath.exp(complex(imag=line.rotation @ time))
+            yield VisualLineItem(position, rotation, line.opacity @ time)
+            for note in line.notes:
+                if time > note.time + note.hold or time < note.time + note.hold - 50:
+                    continue
+
+                height = note.floor - line.floor @ time
+                if not note.above:
+                    height = -height
+
+                if note.type == NoteType.HOLD:
+                    if time <= note.time:
+                        note_height = note.speed * note.hold
+                        if not note.above:
+                            note_height = -note_height
+                        yield VisualNoteItem(
+                            note.type, position + (note.offset + height * 1j) * rotation, rotation, note_height
+                        )
+                    else:
+                        note_height = note.speed * (note.hold + note.time - time)
+                        if not note.above:
+                            note_height = -note_height
+                        yield VisualNoteItem(
+                            note.type,
+                            position + note.offset * rotation,
+                            rotation,
+                            note_height,
+                        )
+                else:
+                    yield VisualNoteItem(note.type, position + (note.offset + height * 1j) * rotation, rotation, 0)
+
     WINDOW_SIZE = (1280, 720)
     WINDOW_WIDTH, WINDOW_HEIGHT = WINDOW_SIZE
 
     window = pyglet.window.Window(width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
 
-    start = time.monotonic()
+    start = 0
 
     # chart = VisualPgrChart(json.load(open('Assets/Tracks/Aleph0.LeaF.0/Chart_IN.json')))
     # chart = VisualPgrChart(json.load(open('Assets/Tracks/Nhelv.Silentroom.0/Chart_IN.json')))
@@ -454,14 +450,14 @@ if __name__ == '__main__':
         now = start if paused else time.monotonic() - start
         label.text = f'{int(now // 60):02d}:{now % 60:06.3f}'
         label.draw()
-        for item in render(chart, now):
+        for item in render_chart(chart, now):
             match item:
-                case VisualLineItem():
-                    position = Position(item.center.real * scale[0], item.center.imag * scale[1])
-                    left = position + item.rotation * line_radius
-                    right = position - item.rotation * line_radius
+                case VisualLineItem(center=center, rotation=rotation, opacity=opacity):
+                    position = Position(center.real * scale[0], center.imag * scale[1])
+                    left = position + rotation * line_radius
+                    right = position - rotation * line_radius
                     line = pyglet.shapes.Line(left.real, left.imag, right.real, right.imag, 4, (255, 255, 255), batch)
-                    line.opacity = int(255 * item.opacity)
+                    line.opacity = int(255 * opacity)
                     shapes.append(line)
                 case VisualNoteItem(type=NoteType.HOLD):
                     bottom_middle = Position(item.bottom_middle.real * scale[0], item.bottom_middle.imag * scale[1])
@@ -491,10 +487,10 @@ if __name__ == '__main__':
                     )
         batch.draw()
 
-    keys = {key.LEFT: False, key.RIGHT: False, key.COMMA: False, key.PERIOD: False, key.A: False, key.D: False}
+    keys = {key.LEFT: False, key.RIGHT: False, key.COMMA: False, key.PERIOD: False, key.UP: False, key.DOWN: False}
 
     @window.event
-    def on_key_press(symbol, modifiers):
+    def on_key_press(symbol: int, modifiers):
         global paused, start
         match symbol:
             case key.SPACE:
@@ -508,16 +504,16 @@ if __name__ == '__main__':
                 if not paused:
                     paused = True
                 start = 0
-            case key.LEFT | key.RIGHT | key.COMMA | key.PERIOD | key.A | key.D:
+            case key.LEFT | key.RIGHT | key.COMMA | key.PERIOD | key.UP | key.DOWN:
                 keys[symbol] = True
                 if not paused:
                     paused = True
                     start = time.monotonic() - start
 
     @window.event
-    def on_key_release(symbol, modifiers):
+    def on_key_release(symbol: int, modifiers):
         match symbol:
-            case key.LEFT | key.RIGHT | key.COMMA | key.PERIOD | key.A | key.D:
+            case key.LEFT | key.RIGHT | key.COMMA | key.PERIOD | key.UP | key.DOWN:
                 keys[symbol] = False
 
     def update(_):
@@ -539,4 +535,5 @@ if __name__ == '__main__':
 
     pyglet.clock.schedule_interval(update, 1 / 60)
 
+    start = time.monotonic()
     pyglet.app.run(1 / 120)
