@@ -10,7 +10,12 @@ from dataclasses import dataclass
 from basis import Vector, Position, NoteType
 from bamboo import Bamboo, BrokenBamboo, LivingBamboo
 
-from pec import PecBpsInfo
+from rich.console import Console
+
+from algo.algo_base import TouchAction
+
+from pec import PecBpsInfo, PecChart
+from pgr import PgrChart
 from easing import LVALUE
 from rpe import RPE_EASING_FUNCS
 
@@ -186,6 +191,7 @@ class VisualPgrJudgeLine(VisualJudgeLine):
 class VisualPgrChart(VisualChart):
     def __init__(self, dic: VisualPgrChartDict) -> None:
         format_version = dic['formatVersion']
+        print(format_version)
         self.offset = dic['offset']
         self.lines = [VisualPgrJudgeLine(line, format_version) for line in dic['judgeLineList']]
         if format_version == 1:
@@ -386,10 +392,11 @@ if __name__ == '__main__':
     def render_chart(chart: VisualChart, time: float) -> Generator[VisualLineItem | VisualNoteItem, Any, None]:
         for line in chart.lines:
             position = line.position @ time
-            rotation = cmath.exp(complex(imag=line.rotation @ time))
+            line_rotation = line.rotation @ time
+            rotation = cmath.exp(complex(imag=line_rotation))
             yield VisualLineItem(position, rotation, line.opacity @ time)
             for note in line.notes:
-                if time > note.time + note.hold or time < note.time + note.hold - 50:
+                if time > note.time + note.hold:
                     continue
 
                 height = note.floor - line.floor @ time
@@ -397,12 +404,13 @@ if __name__ == '__main__':
                     height = -height
 
                 if note.type == NoteType.HOLD:
+                    # hold的rotation是float，而不是complex，因为我们在绘制hold时只需要偏转角度
                     if time <= note.time:
                         note_height = note.speed * note.hold
                         if not note.above:
                             note_height = -note_height
                         yield VisualNoteItem(
-                            note.type, position + (note.offset + height * 1j) * rotation, rotation, note_height
+                            note.type, position + (note.offset + height * 1j) * rotation, line_rotation, note_height
                         )
                     else:
                         note_height = note.speed * (note.hold + note.time - time)
@@ -411,7 +419,7 @@ if __name__ == '__main__':
                         yield VisualNoteItem(
                             note.type,
                             position + note.offset * rotation,
-                            rotation,
+                            line_rotation,
                             note_height,
                         )
                 else:
@@ -424,17 +432,40 @@ if __name__ == '__main__':
 
     start = 0
 
-    # chart = VisualPgrChart(json.load(open('Assets/Tracks/Aleph0.LeaF.0/Chart_IN.json')))
+    # chart = VisualPgrChart(json.load(open('Assets/Tracks/狂喜蘭舞.LeaF.0/Chart_AT.json')))
     # chart = VisualPgrChart(json.load(open('Assets/Tracks/Nhelv.Silentroom.0/Chart_IN.json')))
-    chart = VisualPecChart(open('./98527886.json').read())
+    chrt = PgrChart(json.load(open('Assets/Tracks/DESTRUCTION321.Normal1zervsBrokenNerdz.0/Chart_AT.json')))
+    from algo.algo3 import solve
+    screen, ans = solve(chrt, {}, Console())
+    # verify answer
+    ptrs = defaultdict(bool)
+    for ts, events in ans:
+        assert ts % 8 == 0
+        this_round = set()
+        for event in events:
+            assert event.pointer_id not in this_round, f'ts = {ts}, {events}'
+            this_round.add(event.pointer_id)
+            match event.action:
+                case TouchAction.DOWN:
+                    assert not ptrs[event.pointer_id], f'DOWN(ts={ts}, id={event.pointer_id})'
+                    ptrs[event.pointer_id] = True
+                case TouchAction.MOVE:
+                    assert ptrs[event.pointer_id], f'MOVE(ts={ts}, id={event.pointer_id}, pos={event.pos})'
+                case TouchAction.UP:
+                    assert ptrs[event.pointer_id], f'UP(ts={ts}, id={event.pointer_id})'
+                    ptrs[event.pointer_id] = False
+    assert not any(ptrs.values())
+    print('验证通过')
+    exit()
+    # chart = VisualPecChart(open('./98527886.json').read())
     print(f'共计{len(chart.lines)}根判定线')
     scale = (WINDOW_WIDTH / chart.screen_size.real, WINDOW_HEIGHT / chart.screen_size.imag)
 
     colors = [
-        (0, 255, 255),  # TAP
-        (255, 255, 0),  # DRAG
+        (10, 195, 255),  # TAP
+        (240, 237, 105),  # DRAG
         (0, 255, 255),  # HOLD
-        (255, 0, 0),  # FLICK
+        (254, 67, 101),  # FLICK
     ]
     note_radius = 50
     line_radius = 10000
@@ -461,20 +492,9 @@ if __name__ == '__main__':
                     shapes.append(line)
                 case VisualNoteItem(type=NoteType.HOLD):
                     bottom_middle = Position(item.bottom_middle.real * scale[0], item.bottom_middle.imag * scale[1])
-                    top_middle = item.bottom_middle + item.rotation * 1j * item.height
-                    top_middle = Position(top_middle.real * scale[0], top_middle.imag * scale[1])
-                    top_left = top_middle + item.rotation * note_radius
-                    top_right = top_middle - item.rotation * note_radius
-                    bottom_left = bottom_middle + item.rotation * note_radius
-                    bottom_right = bottom_middle - item.rotation * note_radius
-                    hold = pyglet.shapes.Polygon(
-                        (top_left.real, top_left.imag),
-                        (top_right.real, top_right.imag),
-                        (bottom_right.real, bottom_right.imag),
-                        (bottom_left.real, bottom_left.imag),
-                        color=(0, 255, 255, 128),
-                        batch=batch,
-                    )
+                    hold = pyglet.shapes.Rectangle(bottom_middle.real, bottom_middle.imag, note_radius * 2, item.height * scale[1], (10, 195, 255, 200), batch)
+                    hold.anchor_position = (note_radius, 0)
+                    hold.rotation = math.degrees(-item.rotation.real)
                     shapes.append(hold)
                 case _:
                     position = Position(item.bottom_middle.real * scale[0], item.bottom_middle.imag * scale[1])
@@ -518,9 +538,9 @@ if __name__ == '__main__':
 
     def update(_):
         global start
-        if keys[key.A]:
+        if keys[key.UP]:
             start -= 0.1
-        elif keys[key.D]:
+        elif keys[key.DOWN]:
             start += 0.1
         elif keys[key.LEFT]:
             start -= 0.01
@@ -536,4 +556,4 @@ if __name__ == '__main__':
     pyglet.clock.schedule_interval(update, 1 / 60)
 
     start = time.monotonic()
-    pyglet.app.run(1 / 120)
+    pyglet.app.run(1 / 30)

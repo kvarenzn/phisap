@@ -620,7 +620,7 @@ class MainWindow(QWidget):
             if algoIndex == 0:
                 import algo.algo1 as algo
             else:
-                import algo.algo2 as algo
+                import algo.algo3 as algo
             screen, ans = algo.solve(chart, self.getAlgorithmConfigureDict(), self.console)
             if self.saveResult.isChecked():
                 self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
@@ -676,7 +676,7 @@ class MainWindow(QWidget):
             if algoIndex == 0:
                 import algo.algo1 as algo
             else:
-                import algo.algo2 as algo
+                import algo.algo3 as algo
             screen, ans = algo.solve(chart, self.getAlgorithmConfigureDict(), self.console)
             self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
 

@@ -171,6 +171,7 @@ class VirtualTouchEvent(NamedTuple):
     pos: Position
     action: TouchAction
     pointer_id: int
+    extra_message: str | None = None
 
     def __str__(self) -> str:
         return f'''TouchEvent<{self.pointer_id} {self.action.name} @ ({self.pos.real:4.2f}, {self.pos.imag:4.2f})>'''

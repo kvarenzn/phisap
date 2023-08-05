@@ -131,7 +131,7 @@ class PointerAllocator:
 
     def _alloc(self, note: PlainNote) -> Pointer:
         available_pointers = [p for p in self.pointers if p.note is None or p.age > 0]
-        assert available_pointers
+        assert available_pointers, f'{self.now // 60000:02d}:{self.now % 60000 / 1000:05.3f}'
         return min(available_pointers, key=lambda p: distance_of(p.note, note))  # 优先使用废弃的Pointer
 
     def _insert(self, timestamp: int, event: VirtualTouchEvent) -> None:
