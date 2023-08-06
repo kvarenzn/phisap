@@ -75,7 +75,7 @@ class PecChart(Chart):
     judge_lines: defaultdict[int, PecJudgeLine]
 
     _CHART_WIDTH = 2048
-    _CHART_HEIGHT = 1024
+    _CHART_HEIGHT = 1400
 
     def __init__(self, content: str, ratio: tuple[int, int]):
         super().__init__()
