@@ -127,8 +127,9 @@ class CompGeoHelper:
 
 class PlainNote(NamedTuple):
     timestamp: int
-    judge_area: Polygon
+    position: Position
     rotation: Vector
+    judge_area: Polygon
 
 
 class Frame(NamedTuple):
@@ -170,20 +171,20 @@ class PointerAllocator:
         self.screen = screen
         self.cghelper = cghelper
         self.flick_duration = flick_duration
-        self.flick_rotate_factor = 1j if flick_direction == 0 else 1
+        self.flick_rotate_factor = -1j if flick_direction == 0 else 1
         self.pointers = set(pointers)
         self.on_screen = []
         self.events = defaultdict(list)
         self.ts2ms = ts2ms
 
-    def _alloc(self, judge_area: Polygon) -> Pointer | int:
+    def _alloc(self, judge_area: Position) -> Pointer | int:
         # 如果返回Pointer，表明这是“休息”的指针
         # 否则，表明这是“空闲”的指针
-
+        point = Point(judge_area.real, judge_area.imag)
         # 优先使用"休息"的pointer
         on_screen_pointers = [p for p in self.on_screen if p.expire <= self.now]
         if on_screen_pointers:
-            return min(on_screen_pointers, key=lambda p: distance(Point(p.position.real, p.position.imag), judge_area))
+            return min(on_screen_pointers, key=lambda p: distance(Point(p.position.real, p.position.imag), point))
         # 没有，则使用"空闲"的pointer
         if self.pointers:
             return self.pointers.pop()
@@ -208,13 +209,13 @@ class PointerAllocator:
         self.now = timestamp
 
         # 步骤1：计算并合并drag和tap的判定区
-        taps_area = []
-        drags_area = []
+        taps_area: list[PlainNote | Polygon] = []
+        drags_area: list[PlainNote | Polygon] = []
 
         ## tap相互之间不能合并，因为一次DOWN事件只能消除掉一个tap的判定
         ## 将所有的判定区添加到taps_area中
         for note in frame.taps:
-            taps_area.append(note.judge_area)
+            taps_area.append(note)
 
         ## 合并drags
         ## 每个drag判定区先尝试与现有的tap区间合并
@@ -235,60 +236,85 @@ class PointerAllocator:
 
             # 先尝试往taps_area里合并
             for index, area in enumerate(taps_area):
+                if not isinstance(area, Polygon):
+                    area = area.judge_area
                 if intersects(area, note.judge_area):
                     taps_area[index] = intersection(area, note.judge_area)
                     break
             else:
                 # 如果都没有重合的，那么再往taps里合并
                 for index, area in enumerate(drags_area):
+                    if not isinstance(area, Polygon):
+                        area = area.judge_area
                     if intersects(area, note.judge_area):
                         drags_area[index] = intersection(area, note.judge_area)
                         break
                 else:
                     # 如果还不行，那么就单开一片区域
-                    drags_area.append(note.judge_area)
+                    drags_area.append(note)
         
         ## 步骤2：分配tap
         for area in taps_area:
-            position = centroid(area)
+            point: Point
+            position: Position
+            if isinstance(area, Polygon):
+                point = centroid(area)
+                position = Position(point.x, point.y)
+            else:
+                if self.screen.visible(area.position):
+                    position = area.position
+                    point = Point(position.real, position.imag)
+                else:
+                    point = centroid(area.judge_area)
+                    position = Position(point.x, point.y)
+
             if self.pointers:
                 pointer = self.pointers.pop()
             else:
-                pointer = min([pointer for pointer in self.on_screen if pointer.expire < timestamp], key=lambda p: distance(Point(p.position.real, p.position.imag), area))
-            position = Position(position.x, position.y)
+                pointer = min([pointer for pointer in self.on_screen if pointer.expire < timestamp], key=lambda p: distance(Point(p.position.real, p.position.imag), point))
             if isinstance(pointer, Pointer):
                 # 如果分配的是"旧"指针，先抬起，再落下
                 assert pointer.expire < timestamp
                 self._insert(
                     pointer.expire,
-                    VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id, f'expire = {pointer.expire}'),
+                    VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id),
                 )
             pointer = self._bind(pointer, position, 1)
-            self._insert(timestamp, VirtualTouchEvent(position, TouchAction.DOWN, pointer.id, f'now = {self.now}'))
+            self._insert(timestamp, VirtualTouchEvent(position, TouchAction.DOWN, pointer.id))
 
         # 步骤2：分配flick
         for note in frame.flicks:
-            pointer = self._alloc(note.judge_area)
-            center: Point = centroid(note.judge_area)
-            pos = Position(center.x, center.y)
+            pointer = self._alloc(note.position)
+            position = note.position
             if isinstance(pointer, int):
-                self._insert(self.now, VirtualTouchEvent(pos, TouchAction.DOWN, pointer))
+                self._insert(self.now, VirtualTouchEvent(position, TouchAction.DOWN, pointer))
             else:
-                self._insert(self.now, VirtualTouchEvent(pos, TouchAction.MOVE, pointer.id))
-            pointer = self._bind(pointer, pos, self.flick_duration + 1)
+                self._insert(self.now, VirtualTouchEvent(position, TouchAction.MOVE, pointer.id))
+            pointer = self._bind(pointer, position, self.flick_duration + 1)
             note_pos = 0
             for delta in range(1, self.flick_duration + 1):
                 rate = delta / self.flick_duration
-                note_pos = pos + note.rotation * self.flick_rotate_factor * rate * self.screen.flick_radius
+                note_pos = position + note.rotation * self.flick_rotate_factor * rate * self.screen.flick_radius
                 self._insert(self.now + delta, VirtualTouchEvent(note_pos, TouchAction.MOVE, pointer.id))
             pointer.position = note_pos
 
         # 步骤3：分配指针
         ## 先分配drag
         for area in drags_area:
-            pointer = self._alloc(area)
-            position = centroid(area)
-            position = Position(position.x, position.y)
+            point: Point
+            position: Position
+            if isinstance(area, Polygon):
+                point = centroid(area)
+                position = Position(point.x, point.y)
+            else:
+                if self.screen.visible(area.position):
+                    position = area.position
+                    point = Point(position.real, position.imag)
+                else:
+                    point = centroid(area.judge_area)
+                    position = Position(point.x, point.y)
+
+            pointer = self._alloc(position)
             if isinstance(pointer, int):
                 self._insert(self.now, VirtualTouchEvent(position, TouchAction.DOWN, pointer))
             else:
@@ -299,11 +325,11 @@ class PointerAllocator:
         # 步骤4：清理剩余指针
         # 既然已经不需要这些指针了，那就抬起来呗
         # TODO: 设计更完善的算法
-        # rest_pointers = [p for p in self.on_screen if p.expire < timestamp]
-        # for pointer in rest_pointers:
-        #     self._insert(pointer.expire, VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id))
-        #     self.on_screen.remove(pointer)
-        #     self.pointers.add(pointer.id)
+        rest_pointers = [p for p in self.on_screen if p.expire < timestamp]
+        for pointer in rest_pointers:
+            self._insert(pointer.expire, VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id))
+            self.on_screen.remove(pointer)
+            self.pointers.add(pointer.id)
 
     def withdraw(self) -> None:
         """收回在屏幕上的所有pointer"""
@@ -325,7 +351,7 @@ def solve(chart: Chart, _: AlgorithmConfigure, console: Console) -> tuple[Screen
     ts2ms = lambda ts: ts << 3
     ts2s = lambda ts: ts / 125
 
-    def adjust_position(note: Note, line: JudgeLine, seconds: float) -> tuple[Polygon, Vector]:
+    def adjust_position(note: Note, line: JudgeLine, seconds: float) -> tuple[Position, Vector, Polygon]:
         rotation = cmath.exp(line.angle @ seconds * 1j)
         position = line.position @ seconds + rotation * note.offset
         area = None
@@ -345,7 +371,7 @@ def solve(chart: Chart, _: AlgorithmConfigure, console: Console) -> tuple[Screen
                                 area = buffer(Point(position.real, position.imag), 1)
                             else:
                                 area = cghelper.judge_area(position, rotation)
-                        return area, new_rotation
+                        return new_note_pos, new_rotation, area
             else:
                 console.print(
                     f'[yellow]为Note(type={note.type}, pos=({(position.real, position.imag)}), time={note.seconds}s)调整偏移失败，将导致不可预测的错误[/yellow]'
@@ -357,24 +383,24 @@ def solve(chart: Chart, _: AlgorithmConfigure, console: Console) -> tuple[Screen
                     area = buffer(Point(position.real, position.imag), 1)
                 else:
                     area = cghelper.judge_area(position, rotation)
-            return area, rotation
+            return position, rotation, area
 
     # 统计frames
     for line in track(chart.lines, description='统计操作帧...', console=console):
         for note in line.notes:
             ms = round(note.seconds * 1000)
             timestamp = ms2ts(ms)
-            judge_area, rotation = adjust_position(note, line, note.seconds)
+            position, rotation, judge_area = adjust_position(note, line, note.seconds)
             match note.type:
                 case NoteType.HOLD:
-                    frames[timestamp].taps.append(PlainNote(timestamp, judge_area, rotation))
+                    frames[timestamp].taps.append(PlainNote(timestamp, position, rotation, judge_area))
                     end_timestamp = ms2ts(ms + math.ceil(note.hold * 1000))
                     for offset in range(timestamp + 1, end_timestamp):
                         time = ts2s(offset)
-                        judge_area, rotation = adjust_position(note, line, time)
-                        frames[offset].drags.append(PlainNote(offset, judge_area, rotation))
+                        position, rotation, judge_area = adjust_position(note, line, time)
+                        frames[offset].drags.append(PlainNote(offset, position, rotation, judge_area))
                 case _:
-                    plain_note = PlainNote(timestamp, judge_area, rotation)
+                    plain_note = PlainNote(timestamp, position, rotation, judge_area)
                     frame = frames[timestamp]
                     match note.type:
                         case NoteType.FLICK:

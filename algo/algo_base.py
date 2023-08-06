@@ -112,7 +112,7 @@ class ScreenUtil:
     def __init__(self, width: int, height: int) -> None:
         self.width = width
         self.height = height
-        self.flick_radius = height * 0.1
+        self.flick_radius = width * 0.1
 
     def visible(self, pos: Position) -> bool:
         return (0 <= pos.real <= self.width) and (0 <= pos.imag <= self.height)
@@ -171,7 +171,6 @@ class VirtualTouchEvent(NamedTuple):
     pos: Position
     action: TouchAction
     pointer_id: int
-    extra_message: str | None = None
 
     def __str__(self) -> str:
         return f'''TouchEvent<{self.pointer_id} {self.action.name} @ ({self.pos.real:4.2f}, {self.pos.imag:4.2f})>'''

@@ -16,6 +16,7 @@ from algo.algo_base import TouchAction
 
 from pec import PecBpsInfo, PecChart
 from pgr import PgrChart
+from rpe import RpeChart
 from easing import LVALUE
 from rpe import RPE_EASING_FUNCS
 
@@ -435,7 +436,8 @@ if __name__ == '__main__':
     # chart = VisualPgrChart(json.load(open('Assets/Tracks/狂喜蘭舞.LeaF.0/Chart_AT.json')))
     # chart = VisualPgrChart(json.load(open('Assets/Tracks/Nhelv.Silentroom.0/Chart_IN.json')))
     # chrt = PgrChart(json.load(open('Assets/Tracks/DESTRUCTION321.Normal1zervsBrokenNerdz.0/Chart_AT.json')))
-    chrt = PecChart(open('./98527886.json').read())
+    chrt = RpeChart(json.load(open('../phira/1837/volcanic (full version)(From Malody).json')))
+    # chrt = PecChart(open('./98527886.json').read())
     from algo.algo3 import solve
     screen, ans = solve(chrt, {}, Console())
     # verify answer
