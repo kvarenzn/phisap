@@ -74,10 +74,13 @@ class PecChart(Chart):
     bpss: list[PecBpsInfo]
     judge_lines: defaultdict[int, PecJudgeLine]
 
-    def __init__(self, content: str):
+    _CHART_WIDTH = 2048
+    _CHART_HEIGHT = 1024
+
+    def __init__(self, content: str, ratio: tuple[int, int]):
         super().__init__()
-        self.screen_width = 2048
-        self.screen_height = 1400
+
+        self.width, self.height = ratio
 
         self.offset = 0
         self.bpss = []
@@ -123,7 +126,7 @@ class PecChart(Chart):
             beats, position_x, above, fake = args
             start = self._beats_to_seconds(beats)
             end = None
-        note = PecNote(note_type_enum, start, position_x, 1.0, 1.0, bool(above), end)
+        note = PecNote(note_type_enum, start, position_x / self._CHART_WIDTH * self.width, 1.0, 1.0, bool(above), end)
         if not fake:
             pec_notes = self.judge_lines[line_number].pec_notes
             assert pec_notes is not None
@@ -159,8 +162,10 @@ class PecChart(Chart):
 
     def _cp(self, line_number: int, beats: float, x: float, y: float) -> None:
         # set position
+        x = x / self._CHART_WIDTH * self.width
+        y = y / self._CHART_HEIGHT * self.height
         seconds = self._beats_to_seconds(beats)
-        self.judge_lines[line_number].position.cut(seconds, complex(x, self.screen_height - y))
+        self.judge_lines[line_number].position.cut(seconds, complex(x, self.height - y))
 
     def _cd(self, line_number: int, beats: float, degree: float) -> None:
         # set degree
@@ -173,10 +178,12 @@ class PecChart(Chart):
 
     def _cm(self, line_number: int, start_beats: float, end_beats: float, x: float, y: float, easing_type: int) -> None:
         # motion event
+        x = x / self._CHART_WIDTH * self.width
+        y = y / self._CHART_HEIGHT * self.height
         seconds_start = self._beats_to_seconds(start_beats)
         seconds_end = self._beats_to_seconds(end_beats)
         self.judge_lines[line_number].position.embed(
-            seconds_start, seconds_end, complex(x, self.screen_height - y), RPE_EASING_FUNCS[easing_type]
+            seconds_start, seconds_end, complex(x, self.height - y), RPE_EASING_FUNCS[easing_type]
         )
 
     def _cr(self, line_number: int, start_beats: float, end_beats: float, end: float, easing_type: int) -> None:

@@ -219,12 +219,12 @@ class RpeJudgeLine(JudgeLine):
             if not isinstance(layers, dict):
                 continue
             if 'moveXEvents' in layers:
-                xss.append(convert_events(layers['moveXEvents']))
+                xss.append(convert_events(layers['moveXEvents'], lambda x: x / chart._CHART_WIDTH * chart.width))
             if 'moveYEvents' in layers:
-                yss.append(convert_events(layers['moveYEvents'], lambda y: -y))
+                yss.append(convert_events(layers['moveYEvents'], lambda y: -y / chart._CHART_HEIGHT * chart.height))
             if 'rotateEvents' in layers:
                 alphas.append(convert_events(layers['rotateEvents'], math.radians))
-        self.position = TwinBamboo(BambooGrove(xss, 0), BambooGrove(yss, 0), lambda pos: pos + complex(self.chart.screen_width, self.chart.screen_height) / 2)
+        self.position = TwinBamboo(BambooGrove(xss, 0), BambooGrove(yss, 0), lambda pos: pos + complex(self.chart.width, self.chart.height) / 2)
         self.angle = BambooGrove(alphas, 0)
 
         extended_dict = dic['extended']
@@ -240,7 +240,7 @@ class RpeJudgeLine(JudgeLine):
             note_type = RPE_NOTE_TYPES[note['type']]
             start_time = self.chart._beats_to_seconds(RpeBeats(*note['startTime']).beats())
             end_time = self.chart._beats_to_seconds(RpeBeats(*note['endTime']).beats())
-            self.notes.append(Note(note_type, start_time, end_time - start_time, complex(note['positionX'], note['yOffset'] * note['speed'])))
+            self.notes.append(Note(note_type, start_time, end_time - start_time, complex(note['positionX'] / chart._CHART_WIDTH * chart.width, note['yOffset'] / chart._CHART_HEIGHT * chart.height * note['speed'])))
     
     def pos(self, seconds: float, offset: Position) -> Position:
         angle = self.angle @ seconds
@@ -256,11 +256,12 @@ class RpeJudgeLine(JudgeLine):
 
 class RpeChart(Chart):
     bpss: list[RpeBpsInfo]
+    _CHART_WIDTH = 1350
+    _CHART_HEIGHT = 900
 
-    def __init__(self, dic: RpeChartDict) -> None:
+    def __init__(self, dic: RpeChartDict, ratio: tuple[int, int]) -> None:
         super().__init__()
-        self.screen_width = 1350
-        self.screen_height = 900
+        self.width, self.height = ratio
 
         self.bpss = []
         for item in dic['BPMList']:
@@ -289,7 +290,7 @@ class RpeChart(Chart):
 if __name__ == '__main__':
     # tests
     import json
-    rpe = RpeChart(json.load(open('../../test/phira/1000/AT15.json')))
+    rpe = RpeChart(json.load(open('../../test/phira/1000/AT15.json')), (16, 9))
     import pygame
 
     pygame.init()

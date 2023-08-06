@@ -143,7 +143,7 @@ def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[S
     chart = preprocess(chart, config['algo1_target_score'], config['algo1_strict_mode'])
     
     # 获得虚拟屏幕的尺寸数据
-    screen = ScreenUtil(chart.screen_width, chart.screen_height)
+    screen = ScreenUtil(chart.width, chart.height)
 
     # 定义flick的触发手法
     # 如果滑键在时刻t判定，那么在时刻t+flick_start开始滑，滑到时刻t+flick_end

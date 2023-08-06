@@ -344,8 +344,8 @@ class PointerAllocator:
 def solve(chart: Chart, _: AlgorithmConfigure, console: Console) -> tuple[ScreenUtil, RawAnswerType]:
     flick_duration = 3
     flick_direction = 0
-    screen = ScreenUtil(chart.screen_width, chart.screen_height)
-    cghelper = CompGeoHelper(chart.screen_width, chart.screen_height)
+    screen = ScreenUtil(chart.width, chart.height)
+    cghelper = CompGeoHelper(chart.width, chart.height)
     frames: defaultdict[int, Frame] = defaultdict(lambda: Frame(list(), list(), list()))
     ms2ts = lambda ms: ms >> 3
     ts2ms = lambda ts: ts << 3

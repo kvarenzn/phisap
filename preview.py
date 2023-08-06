@@ -107,21 +107,22 @@ class VisualPgrChartDict(TypedDict):
 
 class VisualPgrJudgeLine(VisualJudgeLine):
     _NOTE_TYPES = [NoteType.UNKNOWN, NoteType.TAP, NoteType.DRAG, NoteType.HOLD, NoteType.FLICK]
-    _FLOOR_FACTOR = 5.4
 
     def __init__(self, dic: VisualPgrJudgeLineDict, format_version: int) -> None:
         self.bpm = dic['bpm']
         beats_length = 1.875 / self.bpm
         self.notes = []
+        note_factor = 0.9 if format_version == 3 else 40
+        floor_factor = 5.4 if format_version == 3 else 260
         for note in dic['notesAbove']:
             self.notes.append(
                 VisualNote(
                     self._NOTE_TYPES[note['type']],
                     note['time'] * beats_length,
-                    note['positionX'] * 0.9,
+                    note['positionX'] * note_factor,
                     note['holdTime'] * beats_length,
-                    note['speed'] * self._FLOOR_FACTOR,
-                    note['floorPosition'] * self._FLOOR_FACTOR,
+                    note['speed'] * floor_factor,
+                    note['floorPosition'] * floor_factor,
                     True,
                 )
             )
@@ -130,10 +131,10 @@ class VisualPgrJudgeLine(VisualJudgeLine):
                 VisualNote(
                     self._NOTE_TYPES[note['type']],
                     note['time'] * beats_length,
-                    note['positionX'] * 0.9,
+                    note['positionX'] * note_factor,
                     note['holdTime'] * beats_length,
-                    note['speed'] * self._FLOOR_FACTOR,
-                    note['floorPosition'] * self._FLOOR_FACTOR,
+                    note['speed'] * floor_factor,
+                    note['floorPosition'] * floor_factor,
                     False,
                 )
             )
@@ -145,7 +146,7 @@ class VisualPgrJudgeLine(VisualJudgeLine):
                 continue
             start = event['startTime'] * beats_length
             end = event['endTime'] * beats_length
-            delta = (end - start) * event['value'] * self._FLOOR_FACTOR
+            delta = (end - start) * event['value'] * floor_factor
             self.floor.cut(start, end, baseline, baseline + delta)
             baseline += delta
 
@@ -433,34 +434,35 @@ if __name__ == '__main__':
 
     start = 0
 
-    # chart = VisualPgrChart(json.load(open('Assets/Tracks/狂喜蘭舞.LeaF.0/Chart_AT.json')))
+    # chart = VisualPgrChart(json.load(open('Assets/Tracks/Burn.NceS.0/Chart_IN.json')))
+    chart = VisualPgrChart(json.load(open('Assets/Tracks/Nhelv.Silentroom.0/Chart_IN.json')))
     # chart = VisualPgrChart(json.load(open('Assets/Tracks/Nhelv.Silentroom.0/Chart_IN.json')))
     # chrt = PgrChart(json.load(open('Assets/Tracks/DESTRUCTION321.Normal1zervsBrokenNerdz.0/Chart_AT.json')))
-    chrt = RpeChart(json.load(open('../phira/1837/volcanic (full version)(From Malody).json')))
+    # chrt = RpeChart(json.load(open('../phira/1837/volcanic (full version)(From Malody).json')))
     # chrt = PecChart(open('./98527886.json').read())
-    from algo.algo3 import solve
-    screen, ans = solve(chrt, {}, Console())
+    # from algo.algo3 import solve
+    # screen, ans = solve(chrt, {}, Console())
     # verify answer
-    ptrs = defaultdict(bool)
-    for ts, events in ans:
-        assert ts % 8 == 0
-        this_round = set()
-        for event in events:
-            if event.pointer_id in this_round:
-                print(f'ts = {ts}, {events}')
-            this_round.add(event.pointer_id)
-            match event.action:
-                case TouchAction.DOWN:
-                    assert not ptrs[event.pointer_id], f'DOWN(ts={ts}, id={event.pointer_id})'
-                    ptrs[event.pointer_id] = True
-                case TouchAction.MOVE:
-                    assert ptrs[event.pointer_id], f'MOVE(ts={ts}, id={event.pointer_id}, pos={event.pos})'
-                case TouchAction.UP:
-                    assert ptrs[event.pointer_id], f'UP(ts={ts}, id={event.pointer_id})'
-                    ptrs[event.pointer_id] = False
-    assert not any(ptrs.values())
-    print('验证通过')
-    exit()
+    # ptrs = defaultdict(bool)
+    # for ts, events in ans:
+    #     assert ts % 8 == 0
+    #     this_round = set()
+    #     for event in events:
+    #         if event.pointer_id in this_round:
+    #             print(f'ts = {ts}, {events}')
+    #         this_round.add(event.pointer_id)
+    #         match event.action:
+    #             case TouchAction.DOWN:
+    #                 assert not ptrs[event.pointer_id], f'DOWN(ts={ts}, id={event.pointer_id})'
+    #                 ptrs[event.pointer_id] = True
+    #             case TouchAction.MOVE:
+    #                 assert ptrs[event.pointer_id], f'MOVE(ts={ts}, id={event.pointer_id}, pos={event.pos})'
+    #             case TouchAction.UP:
+    #                 assert ptrs[event.pointer_id], f'UP(ts={ts}, id={event.pointer_id})'
+    #                 ptrs[event.pointer_id] = False
+    # assert not any(ptrs.values())
+    # print('验证通过')
+    # exit()
     # chart = VisualPecChart(open('./98527886.json').read())
     print(f'共计{len(chart.lines)}根判定线')
     scale = (WINDOW_WIDTH / chart.screen_size.real, WINDOW_HEIGHT / chart.screen_size.imag)

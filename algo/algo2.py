@@ -224,7 +224,7 @@ def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[S
     flick_end = config['algo2_flick_end']
     flick_direction = config['algo2_flick_direction']
     force_continue = config['algo2_continue_when_failed']
-    screen = ScreenUtil(chart.screen_width, chart.screen_height)
+    screen = ScreenUtil(chart.width, chart.height)
     frames = Frames(screen)
 
     # 统计frames

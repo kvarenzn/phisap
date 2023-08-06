@@ -47,7 +47,7 @@ class PgrJudgeLine(JudgeLine):
     position: BrokenBamboo[Position]
     angle: BrokenBamboo[float]
 
-    def __init__(self, dic: PgrJudgeLineDict, format_version: int = 3) -> None:
+    def __init__(self, dic: PgrJudgeLineDict, format_version: int, ratio: tuple[int, int]) -> None:
         self.bpm = dic['bpm']
         beats_length = 1.875 / self.bpm
         self.notes = [
@@ -67,6 +67,7 @@ class PgrJudgeLine(JudgeLine):
                 -math.radians(event['start']),
                 -math.radians(event['end']),
             )
+        w, h = ratio
         self.position = BrokenBamboo[Position]()
         if format_version == 1:
             for event in dic['judgeLineMoveEvents']:
@@ -75,8 +76,8 @@ class PgrJudgeLine(JudgeLine):
                 self.position.cut(
                     event['startTime'] * beats_length,
                     event['endTime'] * beats_length,
-                    complex(sv // 1000, sv % 1000),
-                    complex(ev // 1000, ev % 1000),
+                    complex((sv // 1000) / 880 * w, h - (sv % 1000) / 520 * h),
+                    complex((ev // 1000) / 880 * w, h - (ev % 1000) / 520 * h),
                 )
         else:
             for event in dic['judgeLineMoveEvents']:
@@ -84,8 +85,8 @@ class PgrJudgeLine(JudgeLine):
                 self.position.cut(
                     event['startTime'] * beats_length,
                     event['endTime'] * beats_length,
-                    complex(event['start'] * 16, 9 * (1 - event['start2'])),
-                    complex(event['end'] * 16, 9 * (1 - event['end2'])),
+                    complex(event['start'] * w, h * (1 - event['start2'])),
+                    complex(event['end'] * w, h * (1 - event['end2'])),
                 )
 
     def pos(self, seconds: float, offset: Position) -> Position:
@@ -100,14 +101,11 @@ class PgrJudgeLine(JudgeLine):
 class PgrChart(Chart):
     offset: float
     lines: list[PgrJudgeLine]
+    _CHART_SIZE_V1 = (880, 520)
+    _CHART_SIZE_V3 = (16, 9)
 
-    def __init__(self, dic: PgrChartDict) -> None:
+    def __init__(self, dic: PgrChartDict, ratio: tuple[int, int]) -> None:
+        self.width, self.height = ratio
         version = dic['formatVersion']
-        if version == 1:
-            self.screen_width = 880
-            self.screen_height = 520
-        else:
-            self.screen_width = 16
-            self.screen_height = 9
         self.offset = dic['offset']
-        self.lines = [PgrJudgeLine(line, version) for line in dic['judgeLineList']]
+        self.lines = [PgrJudgeLine(line, version, ratio) for line in dic['judgeLineList']]

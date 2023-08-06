@@ -38,7 +38,7 @@ class JudgeLine(metaclass=ABCMeta):
 
 
 class Chart(metaclass=ABCMeta):
-    screen_width: int
-    screen_height: int
+    width: int
+    height: int
     offset: float
     lines: list[JudgeLine]
