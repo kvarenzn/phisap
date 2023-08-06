@@ -191,6 +191,7 @@ class MainWindow(QWidget):
     algo2FlickDirection: QButtonGroup
     algo2TargetScore: QSpinBox
     algo2StrictMode: QCheckBox
+    algo2ContinueWhenFailed: QCheckBox
 
     preferCache: QCheckBox
     mainModeSelectTabs: QTabWidget
@@ -221,6 +222,7 @@ class MainWindow(QWidget):
         'algo2FlickDirection': 1,
         'algo2TargetScore': 1000000,
         'algo2StrictMode': False,
+        'algo2ContinueWhenFailed': False,
         'customChartPath': '',
         'preferCache': True,
         'syncMode': ('syncModeSelector', 0),
@@ -379,6 +381,10 @@ class MainWindow(QWidget):
         self.algo2StrictMode = QCheckBox(text=self.tr('Strict'))
         self.algo2StrictMode.setDisabled(True)
         line4.addWidget(self.algo2StrictMode)
+        line5 = QHBoxLayout()
+        algo2ConfigViewLayout.addLayout(line5)
+        self.algo2ContinueWhenFailed = QCheckBox(text=self.tr('Ignore allocation errors'))
+        line5.addWidget(self.algo2ContinueWhenFailed)
 
         algo3ConfigView = QWidget()
         self.algorithmSelectorTabs.addTab(algo3ConfigView, self.tr('Rebelli Algo'))
@@ -609,7 +615,8 @@ class MainWindow(QWidget):
             algo2_flick_end=self.algo2FlickEnd.value(),
             algo2_flick_direction=self.algo2FlickDirection.checkedId(),
             algo2_target_score=self.algo2TargetScore.value(),
-            algo2_strict_mode=self.algo2StrictMode.isChecked()
+            algo2_strict_mode=self.algo2StrictMode.isChecked(),
+            algo2_continue_when_failed=self.algo2ContinueWhenFailed.isChecked()
         )
 
     def process(self) -> None:

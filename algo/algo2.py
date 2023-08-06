@@ -100,13 +100,14 @@ class PointerAllocator:
     flick_end: int
     flick_duration: int
     flick_rotate_factor: complex
+    force_continue: bool
     screen: ScreenUtil
     pointers: list[Pointer]
     events: defaultdict[int, list[VirtualTouchEvent]]
     last_timestamp: int | None
     now: int
 
-    def __init__(self, screen: ScreenUtil, flick_start: int, flick_end: int, flick_direction: int, max_pointers_count: int = 10, begin_at: int = 1000):
+    def __init__(self, screen: ScreenUtil, flick_start: int, flick_end: int, flick_direction: int, force_continue: bool, max_pointers_count: int = 10, begin_at: int = 1000):
         self.screen = screen
         self.flick_start = flick_start
         self.flick_end = flick_end
@@ -116,6 +117,7 @@ class PointerAllocator:
         self.pointers = [Pointer(i + begin_at) for i in range(max_pointers_count)]
         self.events = defaultdict(list)
         self.last_timestamp = None
+        self.force_continue = force_continue
 
     def _find_available_pointers(self, note: PlainNote) -> Pointer | None:
         """查找当前屏幕上可以直接拿来用的指针
@@ -192,8 +194,13 @@ class PointerAllocator:
             if pointer:
                 pointer.age = 0
                 continue
-            pointer = self._alloc(note)
-            self._drag(pointer, note)
+            try:
+                pointer = self._alloc(note)
+                self._drag(pointer, note)
+            except AssertionError as e:
+                if self.force_continue:
+                    continue
+                raise e
 
         self.last_timestamp = frame.timestamp
 
@@ -216,6 +223,7 @@ def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[S
     flick_start = config['algo2_flick_start']
     flick_end = config['algo2_flick_end']
     flick_direction = config['algo2_flick_direction']
+    force_continue = config['algo2_continue_when_failed']
     screen = ScreenUtil(chart.screen_width, chart.screen_height)
     frames = Frames(screen)
 
@@ -266,7 +274,7 @@ def solve(chart: Chart, config: AlgorithmConfigure, console: Console) -> tuple[S
 
     console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
-    allocator = PointerAllocator(screen, flick_start, flick_end, flick_direction)
+    allocator = PointerAllocator(screen, flick_start, flick_end, flick_direction, force_continue)
 
     for frame in track(frames, description='规划触控事件...'):
         allocator.allocate(frame)

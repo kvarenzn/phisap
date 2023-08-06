@@ -246,10 +246,13 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 
 ## 更新日志
 ### (2023/08/06) v0.15
-- 加入极端算法，用于规划愚人节类谱面
+- 加入极端算法，主要用于应对各种创人配置（当然应对一般谱面也没什么问题（大概））
   - 极端算法固定采样率为125Hz，应该能修复某些设备的卡顿发热问题
   - 目前极端算法并没有设置项
   - 极端算法目前正在开发中，可能在实际的使用中会遇到一些问题
+- 为激进算法加入新设置项：规划出现问题时强制继续
+  - 感谢[@364hao](https://github.com/364hao)提供的思路，详见[issue#107](https://github.com/kvarenzn/phisap/issues/107)
+  - 虽然不知道为什么能work，but it just works (sometimes)
 - 其他的小修小补
 - 本次更新需要安装新依赖`shapely`，用于计算note的判定区
   - `pip install -r requirements.txt --upgrade`
