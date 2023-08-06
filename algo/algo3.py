@@ -15,38 +15,9 @@
 # 如果使用“休息”的指针，我们只需要发送一个"MOVE"事件就能把它移动到我们期望的位置
 # 而使用“空闲”的指针，我们需要发送一个"DOWN"事件，先告知系统屏幕上现在多了个触点。如果只发送"MOVE"在某些系统上是无效的
 
-# 我们在开始时并没有帧的数据，我们需要将谱面转换为帧的列表
-# 我们遍历每条判定线上的每个note，根据note的`time`属性（表明该note何时被判定）将他们放到不同的帧内
-# 除此之外，我们需要拆分hold（这个想法继承自algo2）
-# 根据我的一些实验，hold可能不需要一直按着，中途可以换手，只要一直有指针在判定区内即可
-# 也就是说hold可以看成是一个tap + 一系列的drag
-# 这样我们就能省不少事
-
-# 每一帧的具体流程分三部分：
-# 0. 计算所有在屏幕上的指针的寿命
-# 1. 规划flick
-# 我搜集并阅读了一些资料，发现flick在判定时是从note落到判定线处开始的
-# 也就是说我们不需要在flick落到判定线之前就先在判定区内滑动
-# 这样flick实际上可以类比为一个开头不需要tap的hold（因为phigros只检测“滑动”这个动作）
-# 与hold不同的是，它要求一直使用相同的指针（因为要追踪指针的移动）
-# 所以某种程度来说，flick的要求是最严格的
-# 分配时尽量使用“休息”的指针
-# 绑定给flick后，我们直接往最后的规划结果里添加全部的滑动事件。并设定该指针的寿命为滑动持续的时间+1
-# 2. 规划tap和drag
-# 我们这次规划时将利用phigros的垂直判定机制
-# 先计算出这一帧中每个tap和drag的判定区。之后我们就不再管具体的“note”了，我们需要的是往每个判定区内分配一个指针
-# 为了减少指针的使用，我们求解判定区之间的交集，并使用交集区域代替原有的判定区
-# 如果某个交集属于的判定区中的任意一个来自于tap，那么我们标记该区域为“tap区”，否则标记为“drag”区。
-# 为了能尽可能多地抵消tap，我们先计算tap的判定区之间的交集，再计算drag，最后合并
-# 之后，我们取这个区域的中心点作为我们的触控点
-# 与algo2的思路不同的是，到这一步后，我们先考虑drag区，同样是优先选择分配“休息”的指针
-# 完事后再考虑"tap"区。这时，能直接MOVE过去的指针都已经分配得差不多了。此时如果屏幕上还有指针，那么也先分配给tap区
-# 只不过需要先发送"UP"，再发送"DOWN"
-
-
 import math
 import cmath
-from typing import Callable, Iterable, Iterator, NamedTuple
+from typing import Callable, Iterable, NamedTuple
 from dataclasses import dataclass
 from collections import defaultdict
 from shapely import (
@@ -62,7 +33,7 @@ from shapely import (
     contains,
 )
 
-from basis import Chart, NoteType, Position, Vector
+from basis import Chart, JudgeLine, Note, NoteType, Position, Vector
 from .algo_base import TouchAction, VirtualTouchEvent, ScreenUtil, RawAnswerType, AlgorithmConfigure
 
 
@@ -100,10 +71,9 @@ class CompGeoHelper:
         ys = (segment[0].imag, segment[1].imag)
         return (min(xs) <= point.real <= max(xs)) and (min(ys) <= point.imag <= max(ys))
 
-
     def __init__(self, width: float, height: float) -> None:
         self.width = width
-        self.judge_area_width = width / 10  # TODO: 验证这个值
+        self.judge_area_width = width / 16  # TODO: 验证这个值
         self.height = height
         self.diag_length = abs(complex(width, height))
 
@@ -157,8 +127,8 @@ class CompGeoHelper:
 
 class PlainNote(NamedTuple):
     timestamp: int
-    pos: Position
-    angle: Vector
+    judge_area: Polygon
+    rotation: Vector
 
 
 class Frame(NamedTuple):
@@ -174,12 +144,6 @@ class Pointer:
     id: int  # 唯一id，用于发送指令
     position: Position  # 指针当前所在位置
     expire: int
-
-
-def distance_of(note1: PlainNote | None, note2: PlainNote | None) -> float:
-    if note1 is None or note2 is None:
-        return math.inf
-    return abs(note2.pos - note1.pos)
 
 
 class PointerAllocator:
@@ -212,33 +176,19 @@ class PointerAllocator:
         self.events = defaultdict(list)
         self.ts2ms = ts2ms
 
-    def _alloc(self, judge_area: Polygon, prefer_new: bool) -> Pointer | int:
+    def _alloc(self, judge_area: Polygon) -> Pointer | int:
         # 如果返回Pointer，表明这是“休息”的指针
         # 否则，表明这是“空闲”的指针
-        if not prefer_new:
-            # 优先使用"休息"的pointer
-            on_screen_pointers = [p for p in self.on_screen if p.expire < self.now]
-            if on_screen_pointers:
-                return min(
-                    on_screen_pointers, key=lambda p: distance(Point(p.position.real, p.position.imag), judge_area)
-                )
-            # 没有，则使用"空闲"的pointer
-            if self.pointers:
-                return self.pointers.pop()
-            # 都没有，寄！
-            raise RuntimeError(f'no free pointers @ {self.now}')
-        else:
-            # 优先使用"空闲"的pointer
-            if self.pointers:
-                return self.pointers.pop()
-            # 没有了，强制使用屏幕上已有的pointer
-            on_screen_pointers = [p for p in self.on_screen if p.expire <= self.now]
-            if on_screen_pointers:
-                return min(
-                    on_screen_pointers, key=lambda p: distance(Point(p.position.real, p.position.imag), judge_area)
-                )
-            # 还是没有，寄！
-            raise RuntimeError(f'no free pointers @ {self.now}')
+
+        # 优先使用"休息"的pointer
+        on_screen_pointers = [p for p in self.on_screen if p.expire <= self.now]
+        if on_screen_pointers:
+            return min(on_screen_pointers, key=lambda p: distance(Point(p.position.real, p.position.imag), judge_area))
+        # 没有，则使用"空闲"的pointer
+        if self.pointers:
+            return self.pointers.pop()
+        # 都没有，寄！
+        raise RuntimeError(f'no free pointers @ {self.now}')
 
     def _bind(self, pointer: int | Pointer, position: Position, age: int) -> Pointer:
         if isinstance(pointer, int):
@@ -257,13 +207,69 @@ class PointerAllocator:
         # 更新pointer age
         self.now = timestamp
 
-        # 步骤1：分配flick
+        # 步骤1：计算并合并drag和tap的判定区
+        taps_area = []
+        drags_area = []
+
+        ## tap相互之间不能合并，因为一次DOWN事件只能消除掉一个tap的判定
+        ## 将所有的判定区添加到taps_area中
+        for note in frame.taps:
+            taps_area.append(note.judge_area)
+
+        ## 合并drags
+        ## 每个drag判定区先尝试与现有的tap区间合并
+        ## 计算屏幕上现有的所有指针的位置
+        points = [Point(pointer.position.real, pointer.position.imag) for pointer in self.on_screen if pointer.expire > timestamp]
         for note in frame.flicks:
-            rotation = note.angle
-            area = self.cghelper.judge_area(note.pos, rotation)
-            assert area is not None, note
-            pointer = self._alloc(area, prefer_new=False)
-            center: Point = centroid(area)
+            points.append(centroid(note.judge_area))
+        
+        for note in frame.drags:
+            # 如果目前在屏幕上的指针有谁在drag的判定区内，那么视作已经判定成功
+            ignore = False
+            for point in points:
+                if contains(note.judge_area, point):
+                    ignore = True
+                    break
+            if ignore:
+                continue
+
+            # 先尝试往taps_area里合并
+            for index, area in enumerate(taps_area):
+                if intersects(area, note.judge_area):
+                    taps_area[index] = intersection(area, note.judge_area)
+                    break
+            else:
+                # 如果都没有重合的，那么再往taps里合并
+                for index, area in enumerate(drags_area):
+                    if intersects(area, note.judge_area):
+                        drags_area[index] = intersection(area, note.judge_area)
+                        break
+                else:
+                    # 如果还不行，那么就单开一片区域
+                    drags_area.append(note.judge_area)
+        
+        ## 步骤2：分配tap
+        for area in taps_area:
+            position = centroid(area)
+            if self.pointers:
+                pointer = self.pointers.pop()
+            else:
+                pointer = min([pointer for pointer in self.on_screen if pointer.expire < timestamp], key=lambda p: distance(Point(p.position.real, p.position.imag), area))
+            position = Position(position.x, position.y)
+            if isinstance(pointer, Pointer):
+                # 如果分配的是"旧"指针，先抬起，再落下
+                assert pointer.expire < timestamp
+                self._insert(
+                    pointer.expire,
+                    VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id, f'expire = {pointer.expire}'),
+                )
+            pointer = self._bind(pointer, position, 1)
+            self._insert(timestamp, VirtualTouchEvent(position, TouchAction.DOWN, pointer.id, f'now = {self.now}'))
+
+        # 步骤2：分配flick
+        for note in frame.flicks:
+            pointer = self._alloc(note.judge_area)
+            center: Point = centroid(note.judge_area)
             pos = Position(center.x, center.y)
             if isinstance(pointer, int):
                 self._insert(self.now, VirtualTouchEvent(pos, TouchAction.DOWN, pointer))
@@ -272,58 +278,15 @@ class PointerAllocator:
             pointer = self._bind(pointer, pos, self.flick_duration + 1)
             note_pos = 0
             for delta in range(1, self.flick_duration + 1):
-                rate = 1 - 2 * delta / self.flick_duration
-                note_pos = pos + rotation * self.flick_rotate_factor * rate * self.screen.flick_radius
+                rate = delta / self.flick_duration
+                note_pos = pos + note.rotation * self.flick_rotate_factor * rate * self.screen.flick_radius
                 self._insert(self.now + delta, VirtualTouchEvent(note_pos, TouchAction.MOVE, pointer.id))
             pointer.position = note_pos
-
-        # 步骤2：计算并合并drag和tap的判定区
-        taps_area = []
-        drags_area = []
-
-        ## 先合并taps
-        ## 这时drags_area恒为空
-        for note in frame.taps:
-            judge_area = self.cghelper.judge_area(note.pos, note.angle)
-            assert judge_area is not None, note
-            for index, area in enumerate(taps_area):
-                if intersects(area, judge_area):
-                    taps_area[index] = intersection(area, judge_area)
-                    break
-            else:
-                taps_area.append(judge_area)
-
-        ## 再合并drags
-        for note in frame.drags:
-            judge_area = self.cghelper.judge_area(note.pos, note.angle)
-            assert judge_area is not None, note
-            # 如果目前在屏幕上的指针有谁在drag的判定区内，那么视作已经判定成功
-            ignore = False
-            for pointer in self.on_screen:
-                if pointer.expire > timestamp and contains(judge_area, Point(pointer.position.real, pointer.position.imag)):
-                    ignore = True
-                    break
-            if ignore:
-                continue
-            # 尽量往drags里合并
-            for index, area in enumerate(drags_area):
-                if intersects(area, judge_area):
-                    drags_area[index] = intersection(area, judge_area)
-                    break
-            else:
-                # 如果都没有重合的，那么再往taps里合并
-                for index, area in enumerate(taps_area):
-                    if intersects(area, judge_area):
-                        taps_area[index] = intersection(area, judge_area)
-                        break
-                else:
-                    # 如果还不行，那么就单开一片区域
-                    drags_area.append(judge_area)
 
         # 步骤3：分配指针
         ## 先分配drag
         for area in drags_area:
-            pointer = self._alloc(area, prefer_new=False)
+            pointer = self._alloc(area)
             position = centroid(area)
             position = Position(position.x, position.y)
             if isinstance(pointer, int):
@@ -332,31 +295,20 @@ class PointerAllocator:
                 self._insert(self.now, VirtualTouchEvent(position, TouchAction.MOVE, pointer.id))
             self._bind(pointer, position, 1)
 
-        ## 再分配tap
-        for area in taps_area:
-            pointer = self._alloc(area, prefer_new=False)
-            position = centroid(area)
-            position = Position(position.x, position.y)
-            if isinstance(pointer, Pointer):
-                # 如果分配的是"旧"指针，先抬起，再落下
-                self._insert(pointer.expire, VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id, f'expire = {pointer.expire}'))
-            pointer = self._bind(pointer, position, 1)
-            self._insert(self.now, VirtualTouchEvent(position, TouchAction.DOWN, pointer.id, f'now = {self.now}'))
 
         # 步骤4：清理剩余指针
         # 既然已经不需要这些指针了，那就抬起来呗
-        rest_pointers = [p for p in self.on_screen if p.expire < timestamp]
-        for pointer in rest_pointers:
-            self._insert(pointer.expire, VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id))
-            self.on_screen.remove(pointer)
-            self.pointers.add(pointer.id)
+        # TODO: 设计更完善的算法
+        # rest_pointers = [p for p in self.on_screen if p.expire < timestamp]
+        # for pointer in rest_pointers:
+        #     self._insert(pointer.expire, VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id))
+        #     self.on_screen.remove(pointer)
+        #     self.pointers.add(pointer.id)
 
     def withdraw(self) -> None:
         """收回在屏幕上的所有pointer"""
         for pointer in self.on_screen:
-            self._insert(
-                pointer.expire, VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id)
-            )
+            self._insert(pointer.expire, VirtualTouchEvent(pointer.position, TouchAction.UP, pointer.id))
 
     def done(self) -> RawAnswerType:
         self.withdraw()
@@ -373,48 +325,56 @@ def solve(chart: Chart, _: AlgorithmConfigure, console: Console) -> tuple[Screen
     ts2ms = lambda ts: ts << 3
     ts2s = lambda ts: ts / 125
 
+    def adjust_position(note: Note, line: JudgeLine, seconds: float) -> tuple[Polygon, Vector]:
+        rotation = cmath.exp(line.angle @ seconds * 1j)
+        position = line.position @ seconds + rotation * note.offset
+        area = None
+        if not (visible := screen.visible(position)) and (area := cghelper.judge_area(position, rotation)) is None:
+            for dt in range(1, 10):
+                for sign in (-1, 1):
+                    new_time = seconds + dt * sign * line.beat_duration(seconds)
+                    new_line_pos = line.position @ new_time
+                    new_rotation = cmath.exp(line.angle @ new_time * 1j)
+                    new_note_pos = new_line_pos + rotation * note.offset
+                    if (visible := screen.visible(new_note_pos)) or (area := cghelper.judge_area(position, rotation)) is not None:
+                        console.print(
+                            f'[yellow]Note(type={note.type}, pos=({(position.real, position.imag)}), time={seconds}s) => Note(type={note.type}, pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/yellow]'
+                        )
+                        if visible:
+                            if note.type == NoteType.FLICK:
+                                area = buffer(Point(position.real, position.imag), 1)
+                            else:
+                                area = cghelper.judge_area(position, rotation)
+                        return area, new_rotation
+            else:
+                console.print(
+                    f'[yellow]为Note(type={note.type}, pos=({(position.real, position.imag)}), time={note.seconds}s)调整偏移失败，将导致不可预测的错误[/yellow]'
+                )
+                raise RuntimeError('???')
+        else:
+            if visible:
+                if note.type == NoteType.FLICK:
+                    area = buffer(Point(position.real, position.imag), 1)
+                else:
+                    area = cghelper.judge_area(position, rotation)
+            return area, rotation
+
     # 统计frames
     for line in track(chart.lines, description='统计操作帧...', console=console):
         for note in line.notes:
             ms = round(note.seconds * 1000)
             timestamp = ms2ts(ms)
-            rotation = cmath.exp(line.angle @ note.seconds * 1j)
-            pos = line.position @ note.seconds + rotation * note.offset
+            judge_area, rotation = adjust_position(note, line, note.seconds)
             match note.type:
                 case NoteType.HOLD:
-                    frames[timestamp].taps.append(PlainNote(timestamp, pos, rotation))
-                    end_timestamp = ms2ts(ms + math.ceil(note.hold * 1000)) + 1
+                    frames[timestamp].taps.append(PlainNote(timestamp, judge_area, rotation))
+                    end_timestamp = ms2ts(ms + math.ceil(note.hold * 1000))
                     for offset in range(timestamp + 1, end_timestamp):
                         time = ts2s(offset)
-                        frames[offset].drags.append(
-                            PlainNote(offset, line.pos(time, note.offset), cmath.exp(line.angle @ time * 1j))
-                        )
-                    # TODO: 确认是否需要对从hold中拆出来的每个tap或drag都应用下边的操作(微调偏移，寻找在屏幕内的坐标)
+                        judge_area, rotation = adjust_position(note, line, time)
+                        frames[offset].drags.append(PlainNote(offset, judge_area, rotation))
                 case _:
-                    if not screen.visible(pos) and cghelper.judge_area(pos, rotation) is None:
-                        # 这块的逻辑在algo1.py中有解释
-                        # 现在对所有的note都应用同样的操作
-                        for dt in range(1, 10):
-                            for sign in (-1, 1):
-                                new_time = note.seconds + dt * sign * line.beat_duration(note.seconds)
-                                new_line_pos = line.position @ new_time
-                                new_rotation = cmath.exp(line.angle @ new_time * 1j)
-                                new_note_pos = new_line_pos + rotation * note.offset
-                                if screen.visible(new_note_pos) or cghelper.judge_area(pos, rotation) is not None:
-                                    console.print(
-                                        f'[yellow]Note(type={note.type}, pos=({(pos.real, pos.imag)}), time={note.seconds}s) => Note(type={note.type}, pos=({(new_note_pos.real, new_note_pos.imag)}), time={new_time}s)[/yellow]'
-                                    )
-                                    rotation = new_rotation
-                                    pos = new_note_pos
-                                    break
-                            else:
-                                continue
-                            break
-                        else:
-                            console.print(
-                                f'[yellow]为Note(type={note.type}, pos=({(pos.real, pos.imag)}), time={note.seconds}s)调整偏移失败，将导致不可预测的错误[/yellow]'
-                            )
-                    plain_note = PlainNote(timestamp, pos, rotation)
+                    plain_note = PlainNote(timestamp, judge_area, rotation)
                     frame = frames[timestamp]
                     match note.type:
                         case NoteType.FLICK:
@@ -426,7 +386,7 @@ def solve(chart: Chart, _: AlgorithmConfigure, console: Console) -> tuple[Screen
 
     console.print(f'统计完毕，当前谱面共计{len(frames)}帧')
 
-    allocator = PointerAllocator(screen, cghelper, flick_duration, flick_direction, range(1000, 1011), ts2ms)
+    allocator = PointerAllocator(screen, cghelper, flick_duration, flick_direction, range(1000, 1010), ts2ms)
 
     for timestamp, frame in track(sorted(frames.items()), description='规划触控事件...'):
         allocator.allocate(timestamp, frame)

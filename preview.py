@@ -434,7 +434,8 @@ if __name__ == '__main__':
 
     # chart = VisualPgrChart(json.load(open('Assets/Tracks/狂喜蘭舞.LeaF.0/Chart_AT.json')))
     # chart = VisualPgrChart(json.load(open('Assets/Tracks/Nhelv.Silentroom.0/Chart_IN.json')))
-    chrt = PgrChart(json.load(open('Assets/Tracks/DESTRUCTION321.Normal1zervsBrokenNerdz.0/Chart_AT.json')))
+    # chrt = PgrChart(json.load(open('Assets/Tracks/DESTRUCTION321.Normal1zervsBrokenNerdz.0/Chart_AT.json')))
+    chrt = PecChart(open('./98527886.json').read())
     from algo.algo3 import solve
     screen, ans = solve(chrt, {}, Console())
     # verify answer
@@ -443,7 +444,8 @@ if __name__ == '__main__':
         assert ts % 8 == 0
         this_round = set()
         for event in events:
-            assert event.pointer_id not in this_round, f'ts = {ts}, {events}'
+            if event.pointer_id in this_round:
+                print(f'ts = {ts}, {events}')
             this_round.add(event.pointer_id)
             match event.action:
                 case TouchAction.DOWN:

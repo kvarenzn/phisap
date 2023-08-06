@@ -94,7 +94,7 @@ class PgrJudgeLine(JudgeLine):
         return pos + cmath.exp(angle * 1j) * offset
 
     def beat_duration(self, _: float) -> float:
-        return 1.875 * self.bpm
+        return 1.875 / self.bpm
 
 
 class PgrChart(Chart):

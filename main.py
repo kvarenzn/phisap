@@ -48,7 +48,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.14'
+PHISAP_VERSION = '0.15'
 
 
 class ExtractPackageWorker(QThread):
@@ -380,6 +380,9 @@ class MainWindow(QWidget):
         self.algo2StrictMode.setDisabled(True)
         line4.addWidget(self.algo2StrictMode)
 
+        algo3ConfigView = QWidget()
+        self.algorithmSelectorTabs.addTab(algo3ConfigView, self.tr('Rebelli Algo'))
+
         self.mainModeSelectTabs = QTabWidget()
         self.mainLayout.addWidget(self.mainModeSelectTabs)
         self.autoplayView = QWidget()
@@ -619,6 +622,8 @@ class MainWindow(QWidget):
             ans: RawAnswerType
             if algoIndex == 0:
                 import algo.algo1 as algo
+            elif algoIndex == 1:
+                import algo.algo2 as algo
             else:
                 import algo.algo3 as algo
             screen, ans = algo.solve(chart, self.getAlgorithmConfigureDict(), self.console)
@@ -675,6 +680,8 @@ class MainWindow(QWidget):
         else:
             if algoIndex == 0:
                 import algo.algo1 as algo
+            elif algoIndex == 1:
+                import algo.algo2 as algo
             else:
                 import algo.algo3 as algo
             screen, ans = algo.solve(chart, self.getAlgorithmConfigureDict(), self.console)
