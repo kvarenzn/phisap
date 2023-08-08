@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
     QRadioButton,
     QButtonGroup,
     QSpinBox,
+    QDoubleSpinBox,
     QFileDialog,
     QProgressDialog,
     QMessageBox,
@@ -48,7 +49,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.16'
+PHISAP_VERSION = '0.17'
 
 
 class ExtractPackageWorker(QThread):
@@ -122,15 +123,17 @@ class AutoplayWorker(QThread):
     startTime: float
     running: bool
     delayMs: int
-    defaultOffset: int
+    defaultOffset: float
+    playSpeed: float
 
     def __init__(
-        self, ansIter: typing.Iterator[tuple[int, list[TouchEvent]]], defaultOffset: int, parent: 'MainWindow'
+        self, ansIter: typing.Iterator[tuple[int, list[TouchEvent]]], defaultOffset: float, playSpeed: float, parent: 'MainWindow'
     ) -> None:
         super().__init__(parent)
         self.ansIter = ansIter
         self.delayMs = 0
-        self.defaultOffset = defaultOffset
+        self.defaultOffset = defaultOffset / playSpeed
+        self.playSpeed = playSpeed
 
         assert parent.controller
         self.controller = parent.controller
@@ -138,10 +141,10 @@ class AutoplayWorker(QThread):
     def run(self) -> None:
         self.running = True
         timestamp, events = next(self.ansIter)
-        self.startTime = round(time.monotonic() * 1000) + self.defaultOffset
+        self.startTime = time.monotonic() * 1000 + self.defaultOffset
         try:
             while self.running:
-                now = round(time.monotonic() * 1000) - self.startTime + self.delayMs
+                now = (time.monotonic() * 1000 - self.startTime) * self.playSpeed + self.delayMs
                 if now >= timestamp:
                     for event in events:
                         self.controller.touch(*event.pos, event.action, event.pointer_id)
@@ -199,6 +202,7 @@ class MainWindow(QWidget):
     aspectRatioSelector: QButtonGroup
     delayLabel: QLabel
     delayInput: QSpinBox
+    playSpeedInput: QDoubleSpinBox
     autoplayView: QWidget
     goButton: QPushButton
     saveResult: QCheckBox
@@ -228,6 +232,7 @@ class MainWindow(QWidget):
         'syncMode': ('syncModeSelector', 0),
         'delay': ('delayInput', 0),
         'aspectRatio': ('aspectRatioSelector', 0),
+        'playSpeed': ('playSpeedInput', 1.0),
         'saveCache': ('saveResult', False),
     }
 
@@ -432,9 +437,19 @@ class MainWindow(QWidget):
         self.aspectRatioSelector.addButton(r16x9, id=0)
         self.aspectRatioSelector.addButton(r4x3, id=1)
         autoplayViewLayout.addLayout(line3)
+        line4 = QHBoxLayout()
+        line4.addWidget(QLabel(text=self.tr('Play speed:')))
+        self.playSpeedInput = QDoubleSpinBox()
+        self.playSpeedInput.setRange(0.5, 2.0)
+        self.playSpeedInput.setSingleStep(0.05)
+        self.playSpeedInput.setValue(1.0)
+        line4.addWidget(self.playSpeedInput)
+        line4.addWidget(QLabel(text=self.tr('x')))
+        autoplayViewLayout.addLayout(line4)
         self.goButton = QPushButton(text=self.tr('Prepare'))
         self.goButton.clicked.connect(self.autoplay)
         autoplayViewLayout.addWidget(self.goButton)
+
         testAlgorithmView = QWidget()
         testAlgorithmViewLayout = QVBoxLayout()
         testAlgorithmView.setLayout(testAlgorithmViewLayout)
@@ -468,6 +483,8 @@ class MainWindow(QWidget):
                     widget.setCurrentIndex(self.settings.value(key, defaultValue, type(defaultValue)))
                 case QSpinBox():
                     widget.setValue(self.settings.value(key, defaultValue, type(defaultValue)))
+                case QDoubleSpinBox():
+                    widget.setValue(self.settings.value(key, defaultValue, type(defaultValue)))
                 case QButtonGroup():
                     widget.button(self.settings.value(key, defaultValue, type(defaultValue))).setChecked(True)
                 case QLineEdit():
@@ -489,6 +506,8 @@ class MainWindow(QWidget):
                 case QTabWidget():
                     self.settings.setValue(key, widget.currentIndex())
                 case QSpinBox():
+                    self.settings.setValue(key, widget.value())
+                case QDoubleSpinBox():
                     self.settings.setValue(key, widget.value())
                 case QButtonGroup():
                     self.settings.setValue(key, widget.checkedId())
@@ -720,7 +739,7 @@ class MainWindow(QWidget):
         self.delayLabel.setText(self.tr('Offset:'))
         if self.syncModeSelector.checkedId() == 0:
             # Manual
-            self.autoplayWorker = AutoplayWorker(ansIter, -adaptedAns[0][0], self)
+            self.autoplayWorker = AutoplayWorker(ansIter, -adaptedAns[0][0], self.playSpeedInput.value(), self)
             self.lastDelayValue = self.delayInput.value()
 
             def waitForBegin():
@@ -734,7 +753,7 @@ class MainWindow(QWidget):
         else:
             # Delay
             self.lastDelayValue = self.delayInput.value()
-            self.autoplayWorker = AutoplayWorker(ansIter, self.lastDelayValue, self)
+            self.autoplayWorker = AutoplayWorker(ansIter, self.lastDelayValue, self.playSpeedInput.value(), self)
             self.controller.tap(deviceWidth >> 1, deviceHeight >> 1)
             self.prepareBeforeAutoplay()
 
