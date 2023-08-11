@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from collections import defaultdict
 
 from basis import Chart, NoteType, Position, Vector
-from .algo_base import TouchAction, VirtualTouchEvent, ScreenUtil, RawAnswerType, AlgorithmConfigure
+from .base import TouchAction, VirtualTouchEvent, ScreenUtil, RawAnswerType, AlgorithmConfigure
 
 
 from rich.console import Console

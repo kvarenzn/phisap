@@ -27,29 +27,25 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings
 
 from rich.console import Console
-
-from control import DeviceController
 from catalog import Catalog
 from extract import AssetsManager, TextAsset, ObjectReader, ClassID
-from algo.algo_base import (
+from algo.base import (
     AlgorithmConfigure,
     ScreenUtil,
     dump_data,
     load_data,
-    WindowGeometry,
-    remap_events,
     TouchEvent,
     RawAnswerType,
 )
 from basis import Chart
 from cache_manager import CacheManager
-from control import DeviceController
+from controllers import ScrcpyController, HIDController, GranularAnswerItem, ViscousAnswerItem
 
 from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.17'
+PHISAP_VERSION = '0.18'
 
 
 class ExtractPackageWorker(QThread):
@@ -117,9 +113,9 @@ class ExtractPackageWorker(QThread):
         self.packagePath = packagePath
 
 
-class AutoplayWorker(QThread):
-    controller: DeviceController
-    ansIter: typing.Iterator[tuple[int, list[TouchEvent]]]
+class AutoplayScrcpyWorker(QThread):
+    controller: ScrcpyController
+    ansIter: typing.Iterator[GranularAnswerItem]
     startTime: float
     running: bool
     delayMs: int
@@ -127,16 +123,19 @@ class AutoplayWorker(QThread):
     playSpeed: float
 
     def __init__(
-        self, ansIter: typing.Iterator[tuple[int, list[TouchEvent]]], defaultOffset: float, playSpeed: float, parent: 'MainWindow'
+        self,
+        ansIter: typing.Iterator[GranularAnswerItem],
+        defaultOffset: float,
+        playSpeed: float,
+        controller: ScrcpyController,
+        parent: 'MainWindow',
     ) -> None:
         super().__init__(parent)
         self.ansIter = ansIter
         self.delayMs = 0
         self.defaultOffset = defaultOffset / playSpeed
         self.playSpeed = playSpeed
-
-        assert parent.controller
-        self.controller = parent.controller
+        self.controller = controller
 
     def run(self) -> None:
         self.running = True
@@ -161,20 +160,69 @@ class AutoplayWorker(QThread):
         self.running = False
 
 
+class AutoplayHIDWorker(QThread):
+    controller: HIDController
+    ansIter: typing.Iterator[ViscousAnswerItem]
+    startTime: float
+    running: bool
+    delayMs: int
+    defaultOffset: float
+    playSpeed: float
+
+    def __init__(
+        self,
+        ansIter: typing.Iterator[ViscousAnswerItem],
+        defaultOffset: float,
+        playSpeed: float,
+        controller: HIDController,
+        parent: 'MainWindow',
+    ) -> None:
+        super().__init__(parent)
+        self.ansIter = ansIter
+        self.delayMs = 0
+        self.defaultOffset = defaultOffset / playSpeed
+        self.playSpeed = playSpeed
+        self.controller = controller
+
+    def run(self) -> None:
+        self.running = True
+        timestamp, events = next(self.ansIter)
+        self.startTime = time.monotonic() * 1000 + self.defaultOffset
+        try:
+            while self.running:
+                now = (time.monotonic() * 1000 - self.startTime) * self.playSpeed + self.delayMs
+                if now >= timestamp:
+                    self.controller.send(events)
+                    timestamp, events = next(self.ansIter)
+        except StopIteration:
+            pass
+        finally:
+            pass
+
+    def onDelayChanged(self, delay: int) -> None:
+        self.delayMs = delay
+
+    def stop(self) -> None:
+        self.running = False
+
+
 class MainWindow(QWidget):
     console: Console
     extractedCharts: Path
     cacheManager: CacheManager
 
-    controller: DeviceController | None
+    controller: ScrcpyController | HIDController | None
     running: bool
-    autoplayWorker: AutoplayWorker | None
+    autoplayWorker: AutoplayScrcpyWorker | AutoplayHIDWorker | None
     extractPackageWorker: ExtractPackageWorker | None
     extractProgressDialog: QProgressDialog | None
 
     mainLayout: QLayout
     deviceSerialSelector: QComboBox
     refreshDeviceButton: QPushButton
+    backendSelection: QButtonGroup
+    deviceWidthInput: QSpinBox
+    deviceHeightInput: QSpinBox
     chartSelectTabs: QTabWidget
     songIdSelector: QComboBox
     extractButton: QPushButton
@@ -212,6 +260,9 @@ class MainWindow(QWidget):
     settings: QSettings
 
     SETTINGS: dict[str, tuple[str, typing.Any] | int | float | bool | str] = {
+        'backend': ('backendSelection', 0),
+        'deviceWidth': ('deviceWidthInput', 1080),
+        'deviceHeight': ('deviceHeightInput', 2340),
         'songId': ('songIdSelector', None),
         'difficulty': ('difficultySelector', None),
         'algorithm': ('algorithmSelectorTabs', 0),
@@ -251,6 +302,14 @@ class MainWindow(QWidget):
         self.setWindowTitle(f'phisap v{PHISAP_VERSION}')
         self.mainLayout = QVBoxLayout()
 
+        line1 = QHBoxLayout()
+        line1.addWidget(QLabel(text=self.tr('Backend:')))
+        backendScrcpyBtn = QRadioButton(text='scrcpy')
+        backendOtgHIDBtn = QRadioButton(text='OTG/HID')
+        line1.addWidget(backendScrcpyBtn)
+        line1.addWidget(backendOtgHIDBtn)
+        self.mainLayout.addLayout(line1)
+
         self.deviceSerialSelector = QComboBox()
         self.deviceSerialSelector.currentTextChanged.connect(self.onSelectedDeviceChanged)
         self.refreshDeviceButton = QPushButton(text=self.tr('Refresh'))
@@ -261,6 +320,27 @@ class MainWindow(QWidget):
         deviceSelection.addWidget(QLabel(text=self.tr('Device serial:')))
         deviceSelection.addWidget(self.deviceSerialSelector)
         deviceSelection.addWidget(self.refreshDeviceButton)
+
+        self.backendSelection = QButtonGroup()
+        self.backendSelection.addButton(backendScrcpyBtn, id=0)
+        self.backendSelection.addButton(backendOtgHIDBtn, id=1)
+        self.backendSelection.idClicked.connect(self.onBackendChanged)
+        line1 = QHBoxLayout()
+        line1.addWidget(QLabel(text=self.tr('Screen width:')))
+        self.deviceWidthInput = QSpinBox()
+        self.deviceWidthInput.setRange(0, 65535)
+        self.deviceWidthInput.setDisabled(True)
+        line1.addWidget(self.deviceWidthInput)
+        line1.addWidget(QLabel(text=self.tr('px')))
+        self.mainLayout.addLayout(line1)
+        line2 = QHBoxLayout()
+        line2.addWidget(QLabel(text=self.tr('Screen height:')))
+        self.deviceHeightInput = QSpinBox()
+        self.deviceHeightInput.setRange(0, 65535)
+        self.deviceHeightInput.setDisabled(True)
+        line2.addWidget(self.deviceHeightInput)
+        line2.addWidget(QLabel(text=self.tr('px')))
+        self.mainLayout.addLayout(line2)
 
         self.chartSelectTabs = QTabWidget()
         self.mainLayout.addWidget(self.chartSelectTabs)
@@ -587,6 +667,17 @@ class MainWindow(QWidget):
         if not self.difficultySelector.isEnabled():
             self.difficultySelector.setDisabled(False)
 
+    def onBackendChanged(self, buttonId: int) -> None:
+        if buttonId == 0:
+            # scrcpy
+            self.deviceWidthInput.setDisabled(True)
+            self.deviceHeightInput.setDisabled(True)
+        else:
+            # OTG/HID
+            self.deviceWidthInput.setDisabled(False)
+            self.deviceHeightInput.setDisabled(False)
+        self.refreshDevices()
+
     def onSyncModeChanged(self, buttonId: int) -> None:
         if buttonId == 0:
             # manual
@@ -636,7 +727,7 @@ class MainWindow(QWidget):
             algo2_flick_direction=self.algo2FlickDirection.checkedId(),
             algo2_target_score=self.algo2TargetScore.value(),
             algo2_strict_mode=self.algo2StrictMode.isChecked(),
-            algo2_continue_when_failed=self.algo2ContinueWhenFailed.isChecked()
+            algo2_continue_when_failed=self.algo2ContinueWhenFailed.isChecked(),
         )
 
     def process(self) -> None:
@@ -667,7 +758,14 @@ class MainWindow(QWidget):
     def refreshDevices(self) -> None:
         self.deviceSerialSelector.clear()
         try:
-            devices = DeviceController.get_devices()
+            devices = []
+            backend = self.backendSelection.checkedId()
+            if backend == 0:
+                # scrcpy
+                devices = ScrcpyController.get_devices()
+            elif backend == 1:
+                devices = HIDController.get_devices()
+
             if not devices:
                 self.deviceSerialSelector.addItem(self.tr('No device found'))
                 if self.mainModeSelectTabs.count() == 2:
@@ -684,12 +782,17 @@ class MainWindow(QWidget):
             return
 
         if self.controller and self.controller.serial != serial:
+            self.controller.clean()
             self.controller = None
 
         if serial == self.tr('No device found'):
             return
 
-        self.controller = DeviceController(serial)
+        backend = self.backendSelection.checkedId()
+        if backend == 0:
+            self.controller = ScrcpyController(serial)
+        elif backend == 1:
+            self.controller = HIDController((self.deviceWidthInput.value(), self.deviceHeightInput.value()), serial)
 
     def autoplay(self) -> None:
         self.saveSettings()
@@ -715,31 +818,15 @@ class MainWindow(QWidget):
             self.cacheManager.write_cache_of_content(content, dump_data(screen, ans))
 
         assert self.controller is not None
-
-        deviceWidth = self.controller.device_width
-        deviceHeight = self.controller.device_height
-
-        width: int
-        height: int
-        if self.aspectRatioSelector.checkedId() == 0:
-            # 16:9
-            height = deviceHeight
-            width = height * 16 // 9
-
-        else:
-            # 4:3
-            height = deviceHeight
-            width = height * 4 // 3
-
-        geometry = WindowGeometry((deviceWidth - width) >> 1, (deviceHeight - height) >> 1, width, height)
-
-        adaptedAns = remap_events(screen, geometry, ans)
-        ansIter = iter(adaptedAns)
+        self.controller.connect()
 
         self.delayLabel.setText(self.tr('Offset:'))
+        delay = None
+        adaptedAns = self.controller.preprocess(screen, ans)
+        ansIter = iter(adaptedAns)
         if self.syncModeSelector.checkedId() == 0:
             # Manual
-            self.autoplayWorker = AutoplayWorker(ansIter, -adaptedAns[0][0], self.playSpeedInput.value(), self)
+            delay = -adaptedAns[0][0]
             self.lastDelayValue = self.delayInput.value()
 
             def waitForBegin():
@@ -753,9 +840,19 @@ class MainWindow(QWidget):
         else:
             # Delay
             self.lastDelayValue = self.delayInput.value()
-            self.autoplayWorker = AutoplayWorker(ansIter, self.lastDelayValue, self.playSpeedInput.value(), self)
-            self.controller.tap(deviceWidth >> 1, deviceHeight >> 1)
+            delay = self.lastDelayValue
+            self.controller.tap_center()
+        
+        backend = self.backendSelection.checkedId()
+        playSpeed = self.playSpeedInput.value()
+        if backend == 0:
+            self.autoplayWorker = AutoplayScrcpyWorker(ansIter, delay, playSpeed, self.controller, self)  # type: ignore
+        elif backend == 1:
+            self.autoplayWorker = AutoplayHIDWorker(ansIter, delay, playSpeed, self.controller, self)  # type: ignore
+
+        if self.syncModeSelector.checkedId() == 1:
             self.prepareBeforeAutoplay()
+
 
     def prepareBeforeAutoplay(self) -> None:
         assert self.autoplayWorker is not None

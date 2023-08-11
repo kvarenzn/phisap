@@ -11,7 +11,7 @@ from itertools import chain
 from collections import defaultdict
 from enum import Enum
 
-from .algo_base import RawAnswerType, TouchAction, VirtualTouchEvent, distance_of, ScreenUtil, AlgorithmConfigure, preprocess
+from .base import RawAnswerType, TouchAction, VirtualTouchEvent, distance_of, ScreenUtil, AlgorithmConfigure, preprocess
 
 from basis import Chart, NoteType, Position, Vector
 

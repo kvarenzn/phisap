@@ -34,7 +34,7 @@ from shapely import (
 )
 
 from basis import Chart, JudgeLine, Note, NoteType, Position, Vector
-from .algo_base import TouchAction, VirtualTouchEvent, ScreenUtil, RawAnswerType, AlgorithmConfigure
+from .base import TouchAction, VirtualTouchEvent, ScreenUtil, RawAnswerType, AlgorithmConfigure
 
 
 from rich.console import Console
@@ -261,10 +261,11 @@ class PointerAllocator:
                 point = centroid(area)
                 position = Position(point.x, point.y)
             else:
-                if self.screen.visible(area.position):
-                    position = area.position
-                    point = Point(position.real, position.imag)
-                else:
+                # if self.screen.visible(area.position):
+                #     position = area.position
+                #     point = Point(position.real, position.imag)
+                # else:
+                if True:
                     point = centroid(area.judge_area)
                     position = Position(point.x, point.y)
 
@@ -307,10 +308,11 @@ class PointerAllocator:
                 point = centroid(area)
                 position = Position(point.x, point.y)
             else:
-                if self.screen.visible(area.position):
-                    position = area.position
-                    point = Point(position.real, position.imag)
-                else:
+                # if self.screen.visible(area.position):
+                #     position = area.position
+                #     point = Point(position.real, position.imag)
+                # else:
+                if True:
                     point = centroid(area.judge_area)
                     position = Position(point.x, point.y)
 

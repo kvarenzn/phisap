@@ -12,7 +12,7 @@ from bamboo import Bamboo, BrokenBamboo, LivingBamboo
 
 from rich.console import Console
 
-from algo.algo_base import TouchAction
+from algo.base import TouchAction
 
 from pec import PecBpsInfo, PecChart
 from pgr import PgrChart
