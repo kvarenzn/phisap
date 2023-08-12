@@ -393,9 +393,9 @@ class HIDController:
         return res
 
     def tap_center(self, delay: float = 0.1) -> None:
-        self._send_hid_event(self._gen_event_data([(0, self.device_width >> 1, self.device_height >> 1)]))
+        self._send_hid_event(self._gen_event_data({0: (self.device_width >> 1, self.device_height >> 1)}))
         time.sleep(delay)
-        self._send_hid_event(self._gen_event_data([]))
+        self._send_hid_event(self._gen_event_data({}))
 
     @staticmethod
     def get_devices() -> list[str]:

@@ -74,6 +74,21 @@ Collection (Application)
 End Collection
 ```
 
+大意：
++ 这是一个Touch Screen
+    + 每次汇报10个Finger的状态，每个Finger包含
+        + `Contact Identifier`: Finger的编号，用于指定是哪根手指，4个bit，从0到9
+        + `Tip Switch`: 表示当前某根手指是否按下
+        + (3bit的Padding)
+        + `X`: 手指的X坐标，其最大取值(`Logical Maximum`)表示屏幕的宽度，16个bit
+        + `Y`: 手指的Y坐标，其最大取值(`Logical Maximum`)表示屏幕的高度，16个bit
+    + 除此之外，额外汇报如下信息：
+        + `Contact Count`: 表示当前屏幕上共有几个触点，4个bit
+        + `Contact Count Maximum`: 表示屏幕最多支持几点触控，4个bit (这个应该不用汇报，因为屏幕默认最多支持10点触控)
+
+那么根据Report Description中的信息，我们每次上报都需要传输51bytes的数据，假设我们每毫秒汇报一次状态，则
+所需最大传输速率为`51bytes * 1000/s == 51KB/s`，应该远小于USB1.0的最大传输速率
+
 ## 参考文献及代码(项目)
 1. [AOA2](https://source.android.google.cn/docs/core/interaction/accessories/aoa2)
 2. [Device Class Definition for Human Interface Devices (HID)](https://www.usb.org/sites/default/files/hid1_11.pdf)
