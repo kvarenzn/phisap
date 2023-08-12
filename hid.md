@@ -39,17 +39,15 @@ Collection (Application)
         Usage (Contact Identifier) ; 4 bits for pointer ID
         Report Size (4)
         Report Count (1)
-        Logical Minimum (0)
         Logical Maximum (9)
         Input (Data, Variable, Absolute)
         Usage (Tip Switch) ; 1 bit for status (DOWN, UP)
-        Logical Minimum (0)
         Logical Maximum (1)
         Report Size (1)
-        Report Count (1)
         Input (Data, Variable, Absolute)
-        Report Size (3) ; 3 bits for padding
-        Report Count (1)
+        Usage (In Range) ; 1 bit for in-range status
+        Input (Data, Variable, Absolute)
+        Report Size (2) ; 2 bits for padding
         Input (Constant)
         Usage Page (Generic Desktop Page)
         Usage (X) ; 16 bits for position x
@@ -61,16 +59,6 @@ Collection (Application)
         Input (Data, Variable, Absolute)
     End Collection
     ; (repeat 9 times)
-    Usage Page (Digitalizers)
-    Usage (Contact Count) ; 4 bits for current pointers count
-    Logical Maximum (16)
-    Report Size (4)
-    Report Count (1)
-    Input (Data, Variable, Absolute)
-    Usage (Contact Count Maximum)
-    Report Size (4) ; 4 bits for max pointers count (10)
-    Report Count (1)
-    Input (Constant)
 End Collection
 ```
 
@@ -79,15 +67,16 @@ End Collection
     + 每次汇报10个Finger的状态，每个Finger包含
         + `Contact Identifier`: Finger的编号，用于指定是哪根手指，4个bit，从0到9
         + `Tip Switch`: 表示当前某根手指是否按下
-        + (3bit的Padding)
+        + `In Range`: 表示当前触摸点是否在检测范围内（一般是用于检测触控笔悬浮的，不过我们也加上）
+        + (2bit的Padding)
         + `X`: 手指的X坐标，其最大取值(`Logical Maximum`)表示屏幕的宽度，16个bit
         + `Y`: 手指的Y坐标，其最大取值(`Logical Maximum`)表示屏幕的高度，16个bit
     + 除此之外，额外汇报如下信息：
         + `Contact Count`: 表示当前屏幕上共有几个触点，4个bit
         + `Contact Count Maximum`: 表示屏幕最多支持几点触控，4个bit (这个应该不用汇报，因为屏幕默认最多支持10点触控)
 
-那么根据Report Description中的信息，我们每次上报都需要传输51bytes的数据，假设我们每毫秒汇报一次状态，则
-所需最大传输速率为`51bytes * 1000/s == 51KB/s`，应该远小于USB1.0的最大传输速率
+那么根据Report Description中的信息，我们每次上报都需要传输50bytes的数据，假设我们每毫秒汇报一次状态，则
+所需最大传输速率为`50bytes * 1000/s == 50KB/s`，远小于USB1.0的最大传输速率，所以我们大概率不会遇到延迟的问题（应该吧）
 
 ## 参考文献及代码(项目)
 1. [AOA2](https://source.android.google.cn/docs/core/interaction/accessories/aoa2)

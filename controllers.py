@@ -302,13 +302,13 @@ class HIDController:
     @staticmethod
     def _gen_event_data(fingers: dict[int, tuple[int, int]]) -> bytes:
         res = bytes()
-        ids = set(range(10))
-        for i, (x, y) in fingers.items():
-            res += HIDController._finger_event(i, True, x, y)
-            ids.remove(i)
-        for i in ids:
-            res += HIDController._finger_event(i, False, 0, 0)
-        return res #+ bytes([0b1010 & 0b1111])
+        for i in range(10):
+            if i in fingers:
+                x, y = fingers[i]
+                res += HIDController._finger_event(i, True, x, y)
+            else:
+                res += HIDController._finger_event(i, False, 0, 0)
+        return res
 
     def _register_hid(self):
         self._device.ctrl_transfer(
