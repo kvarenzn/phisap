@@ -55,7 +55,7 @@ class ScrcpyController:
                 else:
                     raise e
         self.skt.listen(1)
-        subprocess.run([*adb, 'reverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{self.port}'])
+        subprocess.run([*adb, 'repointer_idverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{self.port}'])
         command_line = [
             *adb,
             'shell',
@@ -226,7 +226,10 @@ class HIDController:
         0x25, 0x01,        #     Logical Maximum (1)
         0x75, 0x01,        #     Report Size (1)
         0x81, 0x02,        #     Input (Data, Variable, Absolute)
-        0x75, 0x03,        #     Report Size (3)
+        0x09, 0x32,        #     Usage (In Range)
+        0x25, 0x01,        #     Logical Maximum (1)
+        0x81, 0x02,        #     Input (Data, Variable, Absolute)
+        0x75, 0x02,        #     Report Size (2)
         0x81, 0x01,        #     Input (Constant)
         0x05, 0x01,        #     Usage Page (Generic Desktop Page)
         0x09, 0x30,        #     Usage (X)
@@ -244,12 +247,6 @@ class HIDController:
         0xc0,              #   End Collection
     ])  # fmt: skip
     _REPORT_DESCRIPTION_TAIL = bytes([
-        0x09, 0x54,        #   Usage (Contact Count)
-        0x25, 0x10,        #   Logical Maximum (16)
-        0x75, 0x04,        #   Report Size (4)
-        0x81, 0x02,        #   Input (Data, Variable, Absolute)
-        0x09, 0x55,        #   Usage (Contact Count Maximum)
-        0x81, 0x01,        #   Input (Constant)
         0xc0,              # End Collection
     ])  # fmt: skip
 
@@ -300,31 +297,18 @@ class HIDController:
 
     @staticmethod
     def _finger_event(id: int, on_screen: bool, x: int, y: int) -> bytes:
-        return bytes([(id & 0b1111) | (on_screen << 4)]) + struct.pack('HH', x, y)
+        return bytes([(id & 0b1111) | (on_screen * 0b110000)]) + struct.pack('HH', x, y)
 
-    @staticmethod
-    def _gen_event_data_1(fingers: Iterable[tuple[int, int, int]]) -> bytes:
-        res = bytes()
-        count = 0
-        ids = set(range(10))
-        for id, x, y in fingers:
-            res += HIDController._finger_event(id, True, x, y)
-            count += 1
-            ids.remove(id)
-        for _ in range(10 - count):
-            res += HIDController._finger_event(ids.pop(), False, 0, 0)
-        return res + bytes([0b10100000 | (count & 0b1111)])
-    
     @staticmethod
     def _gen_event_data(fingers: dict[int, tuple[int, int]]) -> bytes:
         res = bytes()
-        count = 0
-        for i in range(10):
-            if i in fingers:
-                res += HIDController._finger_event(i, True, fingers[i][0], fingers[i][1])
-            else:
-                res += HIDController._finger_event(i, False, 0, 0)
-        return res + bytes([0b10100000 | (count & 0b1111)])
+        ids = set(range(10))
+        for i, (x, y) in fingers.items():
+            res += HIDController._finger_event(i, True, x, y)
+            ids.remove(i)
+        for i in ids:
+            res += HIDController._finger_event(i, False, 0, 0)
+        return res #+ bytes([0b1010 & 0b1111])
 
     def _register_hid(self):
         self._device.ctrl_transfer(
@@ -370,10 +354,15 @@ class HIDController:
         offset_y = 0
         scale_x = medium_edge // screen.width
         scale_y = short_edge // screen.height
+        # 动态分配指针ID
+        pointer_id_map = {}
+        ids = set(range(10))
         for timestamp, events in answer:
             operated = set()
             for event in events:
-                pointer_id = event.pointer_id - 1000
+                if event.pointer_id not in pointer_id_map:
+                    pointer_id_map[event.pointer_id] = ids.pop()
+                pointer_id = pointer_id_map[event.pointer_id]
                 x = round(event.pos.real * scale_x) + offset_x
                 y = round(event.pos.imag * scale_y) + offset_y
                 x, y = self.device_width - y, x
