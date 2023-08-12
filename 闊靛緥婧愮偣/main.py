@@ -2,7 +2,7 @@ from time import time
 
 from chart import Chart
 from solve import solve, CoordConv
-from control import DeviceController
+from controllers import ScrcpyController
 
 if __name__ == '__main__':
     print('请开启游戏，测量并输入下面五个点的屏幕坐标(以"x, y"的格式输入，单位：像素)：')
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     ans_iter = iter(sorted(ans.items()))
     ms, evs = next(ans_iter)
 
-    ctl = DeviceController(server_dir='..')
+    ctl = ScrcpyController(server_dir='..')
     ctl.tap(*retry_button)
     start = time() + delay
     print('[client] INFO: 自动打歌已启动')

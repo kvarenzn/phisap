@@ -183,42 +183,7 @@ class VirtualTouchEvent(NamedTuple):
         action, pointer_id, x, y = struct.unpack('!BIdd', data)
         return VirtualTouchEvent(complex(x, y), TouchAction(action), pointer_id)
 
-    def _map_to(self, x_offset: int, y_offset: int, x_scale: float, y_scale: float) -> TouchEvent:
-        return TouchEvent(
-            pos=(x_offset + round(self.pos.real * x_scale), y_offset + round(self.pos.imag * y_scale)),
-            action=self.action,
-            pointer_id=self.pointer_id,
-        )
-
-
-AnswerType: TypeAlias = list[tuple[int, list[TouchEvent]]]
 RawAnswerType: TypeAlias = list[tuple[int, list[VirtualTouchEvent]]]
-
-
-class WindowGeometry(NamedTuple):
-    x: int
-    y: int
-    w: int
-    h: int
-
-
-def remap_events(screen: ScreenUtil, geometry: WindowGeometry, answer: RawAnswerType) -> AnswerType:
-    x_scale = geometry.w / screen.width
-    y_scale = geometry.h / screen.height
-    return [
-        (
-            ts,
-            [
-                TouchEvent(
-                    (geometry.x + round(event.pos.real * x_scale), geometry.y + round(event.pos.imag * y_scale)),
-                    event.action,
-                    event.pointer_id,
-                )
-                for event in events
-            ],
-        )
-        for ts, events in answer
-    ]
 
 
 def dump_data(screen: ScreenUtil, ans: RawAnswerType) -> bytes:
