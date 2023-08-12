@@ -5,3 +5,4 @@ rich==13.3.4
 PyQt5==5.15.9
 z3-solver==4.12.2.0
 shapely==2.0.1
+pyusb==1.2.1
