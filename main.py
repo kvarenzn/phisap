@@ -45,7 +45,7 @@ from pgr import PgrChart
 from pec import PecChart
 from rpe import RpeChart
 
-PHISAP_VERSION = '0.18'
+PHISAP_VERSION = '0.19'
 
 
 class ExtractPackageWorker(QThread):
@@ -764,6 +764,7 @@ class MainWindow(QWidget):
                 # scrcpy
                 devices = ScrcpyController.get_devices()
             elif backend == 1:
+                # otg/hid
                 devices = HIDController.get_devices()
 
             if not devices:

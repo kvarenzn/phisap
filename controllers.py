@@ -55,7 +55,7 @@ class ScrcpyController:
                 else:
                     raise e
         self.skt.listen(1)
-        subprocess.run([*adb, 'repointer_idverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{self.port}'])
+        subprocess.run([*adb, 'reverse', f'localabstract:scrcpy_{self.session_id}', f'tcp:{self.port}'])
         command_line = [
             *adb,
             'shell',
