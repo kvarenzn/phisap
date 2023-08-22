@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
     QProgressDialog,
     QMessageBox,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings
+from PyQt5.QtCore import QThread, pyqtSignal, QObject, QSettings
 
 from rich.console import Console
 from catalog import Catalog
@@ -34,12 +34,11 @@ from algo.base import (
     ScreenUtil,
     dump_data,
     load_data,
-    TouchEvent,
     RawAnswerType,
 )
 from basis import Chart
 from cache_manager import CacheManager
-from controllers import ScrcpyController, HIDController, GranularAnswerItem, ViscousAnswerItem
+from controllers import HIDController, ViscousAnswerItem
 
 from pgr import PgrChart
 from pec import PecChart
@@ -113,54 +112,7 @@ class ExtractPackageWorker(QThread):
         self.packagePath = packagePath
 
 
-class AutoplayScrcpyWorker(QThread):
-    controller: ScrcpyController
-    ansIter: typing.Iterator[GranularAnswerItem]
-    startTime: float
-    running: bool
-    delayMs: int
-    defaultOffset: float
-    playSpeed: float
-
-    def __init__(
-        self,
-        ansIter: typing.Iterator[GranularAnswerItem],
-        defaultOffset: float,
-        playSpeed: float,
-        controller: ScrcpyController,
-        parent: 'MainWindow',
-    ) -> None:
-        super().__init__(parent)
-        self.ansIter = ansIter
-        self.delayMs = 0
-        self.defaultOffset = defaultOffset / playSpeed
-        self.playSpeed = playSpeed
-        self.controller = controller
-
-    def run(self) -> None:
-        self.running = True
-        timestamp, events = next(self.ansIter)
-        self.startTime = time.monotonic() * 1000 + self.defaultOffset
-        try:
-            while self.running:
-                now = (time.monotonic() * 1000 - self.startTime) * self.playSpeed + self.delayMs
-                if now >= timestamp:
-                    for event in events:
-                        self.controller.touch(*event.pos, event.action, event.pointer_id)
-                    timestamp, events = next(self.ansIter)
-        except StopIteration:
-            pass
-        finally:
-            pass
-
-    def onDelayChanged(self, delay: int) -> None:
-        self.delayMs = delay
-
-    def stop(self) -> None:
-        self.running = False
-
-
-class AutoplayHIDWorker(QThread):
+class AutoplayWorker(QThread):
     controller: HIDController
     ansIter: typing.Iterator[ViscousAnswerItem]
     startTime: float
@@ -211,16 +163,15 @@ class MainWindow(QWidget):
     extractedCharts: Path
     cacheManager: CacheManager
 
-    controller: ScrcpyController | HIDController | None
+    controller: HIDController | None
     running: bool
-    autoplayWorker: AutoplayScrcpyWorker | AutoplayHIDWorker | None
+    autoplayWorker: AutoplayWorker | None
     extractPackageWorker: ExtractPackageWorker | None
     extractProgressDialog: QProgressDialog | None
 
     mainLayout: QLayout
     deviceSerialSelector: QComboBox
     refreshDeviceButton: QPushButton
-    backendSelection: QButtonGroup
     deviceWidthInput: QSpinBox
     deviceHeightInput: QSpinBox
     chartSelectTabs: QTabWidget
@@ -260,7 +211,6 @@ class MainWindow(QWidget):
     settings: QSettings
 
     SETTINGS: dict[str, tuple[str, typing.Any] | int | float | bool | str] = {
-        'backend': ('backendSelection', 0),
         'deviceWidth': ('deviceWidthInput', 1080),
         'deviceHeight': ('deviceHeightInput', 2340),
         'songId': ('songIdSelector', None),
@@ -302,14 +252,6 @@ class MainWindow(QWidget):
         self.setWindowTitle(f'phisap v{PHISAP_VERSION}')
         self.mainLayout = QVBoxLayout()
 
-        line1 = QHBoxLayout()
-        line1.addWidget(QLabel(text=self.tr('Backend:')))
-        backendScrcpyBtn = QRadioButton(text='scrcpy')
-        backendOtgHIDBtn = QRadioButton(text='OTG/HID')
-        line1.addWidget(backendScrcpyBtn)
-        line1.addWidget(backendOtgHIDBtn)
-        self.mainLayout.addLayout(line1)
-
         self.deviceSerialSelector = QComboBox()
         self.deviceSerialSelector.currentTextChanged.connect(self.onSelectedDeviceChanged)
         self.refreshDeviceButton = QPushButton(text=self.tr('Refresh'))
@@ -321,15 +263,10 @@ class MainWindow(QWidget):
         deviceSelection.addWidget(self.deviceSerialSelector)
         deviceSelection.addWidget(self.refreshDeviceButton)
 
-        self.backendSelection = QButtonGroup()
-        self.backendSelection.addButton(backendScrcpyBtn, id=0)
-        self.backendSelection.addButton(backendOtgHIDBtn, id=1)
-        self.backendSelection.idClicked.connect(self.onBackendChanged)
         line1 = QHBoxLayout()
         line1.addWidget(QLabel(text=self.tr('Screen width:')))
         self.deviceWidthInput = QSpinBox()
         self.deviceWidthInput.setRange(0, 65535)
-        self.deviceWidthInput.setDisabled(True)
         line1.addWidget(self.deviceWidthInput)
         line1.addWidget(QLabel(text=self.tr('px')))
         self.mainLayout.addLayout(line1)
@@ -337,7 +274,6 @@ class MainWindow(QWidget):
         line2.addWidget(QLabel(text=self.tr('Screen height:')))
         self.deviceHeightInput = QSpinBox()
         self.deviceHeightInput.setRange(0, 65535)
-        self.deviceHeightInput.setDisabled(True)
         line2.addWidget(self.deviceHeightInput)
         line2.addWidget(QLabel(text=self.tr('px')))
         self.mainLayout.addLayout(line2)
@@ -667,17 +603,6 @@ class MainWindow(QWidget):
         if not self.difficultySelector.isEnabled():
             self.difficultySelector.setDisabled(False)
 
-    def onBackendChanged(self, buttonId: int) -> None:
-        if buttonId == 0:
-            # scrcpy
-            self.deviceWidthInput.setDisabled(True)
-            self.deviceHeightInput.setDisabled(True)
-        else:
-            # OTG/HID
-            self.deviceWidthInput.setDisabled(False)
-            self.deviceHeightInput.setDisabled(False)
-        self.refreshDevices()
-
     def onSyncModeChanged(self, buttonId: int) -> None:
         if buttonId == 0:
             # manual
@@ -758,15 +683,7 @@ class MainWindow(QWidget):
     def refreshDevices(self) -> None:
         self.deviceSerialSelector.clear()
         try:
-            devices = []
-            backend = self.backendSelection.checkedId()
-            if backend == 0:
-                # scrcpy
-                devices = ScrcpyController.get_devices()
-            elif backend == 1:
-                # otg/hid
-                devices = HIDController.get_devices()
-
+            devices = HIDController.get_devices()
             if not devices:
                 self.deviceSerialSelector.addItem(self.tr('No device found'))
                 if self.mainModeSelectTabs.count() == 2:
@@ -789,11 +706,7 @@ class MainWindow(QWidget):
         if serial == self.tr('No device found'):
             return
 
-        backend = self.backendSelection.checkedId()
-        if backend == 0:
-            self.controller = ScrcpyController(serial)
-        elif backend == 1:
-            self.controller = HIDController((self.deviceWidthInput.value(), self.deviceHeightInput.value()), serial)
+        self.controller = HIDController((self.deviceWidthInput.value(), self.deviceHeightInput.value()), serial)
 
     def autoplay(self) -> None:
         self.saveSettings()
@@ -822,12 +735,12 @@ class MainWindow(QWidget):
         self.controller.connect()
 
         self.delayLabel.setText(self.tr('Offset:'))
-        delay = None
         adaptedAns = self.controller.preprocess(screen, ans)
         ansIter = iter(adaptedAns)
+        playSpeed = self.playSpeedInput.value()
         if self.syncModeSelector.checkedId() == 0:
             # Manual
-            delay = -adaptedAns[0][0]
+            self.autoplayWorker = AutoplayWorker(ansIter, -adaptedAns[0][0], playSpeed, self.controller, self)
             self.lastDelayValue = self.delayInput.value()
 
             def waitForBegin():
@@ -841,19 +754,9 @@ class MainWindow(QWidget):
         else:
             # Delay
             self.lastDelayValue = self.delayInput.value()
-            delay = self.lastDelayValue
-            self.controller.tap_center()
-        
-        backend = self.backendSelection.checkedId()
-        playSpeed = self.playSpeedInput.value()
-        if backend == 0:
-            self.autoplayWorker = AutoplayScrcpyWorker(ansIter, delay, playSpeed, self.controller, self)  # type: ignore
-        elif backend == 1:
-            self.autoplayWorker = AutoplayHIDWorker(ansIter, delay, playSpeed, self.controller, self)  # type: ignore
-
-        if self.syncModeSelector.checkedId() == 1:
+            self.autoplayWorker = AutoplayWorker(ansIter, self.lastDelayValue, playSpeed, self.controller, self)
             self.prepareBeforeAutoplay()
-
+            self.controller.tap_center()
 
     def prepareBeforeAutoplay(self) -> None:
         assert self.autoplayWorker is not None

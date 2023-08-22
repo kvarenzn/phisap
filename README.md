@@ -19,12 +19,7 @@ _phisap的图标由[@ShintoKosei](https://github.com/ShintoKosei)制作，授权
 
 ---
 
-你现在所在的分支为`dev`，包含最新的更新内容，不过不保证一定可用，因此不推荐普通用户使用
-
-如果想切换回旧版phisap所在分支，[请点击这里返回](https://github.com/kvarenzn/phisap/tree/stable)
-
-本分支的更新仅在以下环境上测试过：PC OS: archlinux x64，游戏设备: OnePlus 7 Pro，氢OS 10.0.10.GM21
-
+你现在所在的分支为`otg-only`，本分支用于测试移除scrcpy-server作为后端的相关代码后的稳定性
 
 ## 目录
 
@@ -39,7 +34,6 @@ _phisap的图标由[@ShintoKosei](https://github.com/ShintoKosei)制作，授权
 - [暂不支持的谱面](#暂不支持的谱面)
 - [课题模式](#课题模式)
 - [遇到问题?](#遇到问题?)
-- [对 Arcaea 的支持](#对arcaea的支持)
 - [致谢](#致谢)
 - [开源许可](#开源许可)
 - [更新日志](#更新日志)
@@ -48,7 +42,6 @@ _phisap的图标由[@ShintoKosei](https://github.com/ShintoKosei)制作，授权
 
 - 本项目属于个人兴趣项目，与厦门鸽游网络有限公司无关
 - **本项目内不含任何版权素材，且本项目并非商业项目**
-- 项目的服务端借用自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)，在此感谢 scrcpy 的作者和维护者们
 - 截止目前，项目作者从未在任何除 GitHub 以外的平台上以任何方式宣传过本项目
 
 ## 灵感来源
@@ -97,12 +90,6 @@ _phisap的图标由[@ShintoKosei](https://github.com/ShintoKosei)制作，授权
      - 大小约为 1.3GB
      - 使用`adb pull`或者文件管理器直接复制出来即可
    - 当然，如果你不想手动提取，也可以直接去网上下载一个 phigros 的安装包或数据包，注意版本对应即可
-4. 准备服务端。请去[scrcpy 的 releases 页面](https://github.com/Genymobile/scrcpy/releases) 下载`scrcpy-server-v2.0`，不要下载成别的版本。下载完成后，请将文件直接放置在 phisap 的根目录（与`main.py`之类的文件在同一文件夹即可），不要更改文件的名称（比如添加后缀），否则 phisap 将无法识别
-   - 如果你使用\*nix 系统，且安装有 wget，那么下面的命令与上面描述的操作等效:
-     ```bash
-     cd phisap  # 定位到phisap的根目录下
-     wget https://github.com/Genymobile/scrcpy/releases/download/v2.0/scrcpy-server-v2.0
-     ```
 
 ### 运行
 
@@ -117,6 +104,8 @@ python main.py
 - 解析谱面文件，分析出每个音符的击打位置、击打方式和击打时间
 - 将这些击打操作转换为触控事件序列
   - 即按下(DOWN)、移动(MOVE)和抬起(UP)
+- 将触控事件序列转换为触控屏的指针上报数据
+- 与游戏设备建立通信，模拟出一个十指触控屏
 - 开始操作后，逐一向设备发送这些触控事件
 
 ## 注意事项
@@ -179,20 +168,6 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 + 确保模板中的每个问题都诚实地回答了
 + 确保模板中需要你勾选的内容都勾选了
 
-## <del>对 Arcaea 的支持</del>
-
-**2023/07/26更新：目前对arcaea的支持仅限于2021年及以前的版本，对最新版的支持将在后续更新中陆续实现**
-
-项目`闊靛緥婧愮偣/`文件夹下的文件实现了最简陋的对音游韵律源点（arcaea）的支持，原理完全相同。
-
-需要您手动提取谱面文件（比 phigros 简单，网上搜索一下就能找到），再运行`闊靛緥婧愮偣/main.py`，按照程序提示输入。
-
-支持的谱面声明包括：
-
-- 函数：`arc()`、`arctap()`、`timing()`和`hold()`，`scenecontrol()`会被忽略
-- easing：`b`、`s`、`si`、`so`、`sisi`、`soso`、`siso`和`sosi`
-- 其余**均不支持**，尤其是对 camera 的操作
-
 ## 对社区自制谱/类 Phigros 社区音游的支持
 
 目前支持的谱面格式
@@ -225,7 +200,6 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 
 ## 致谢
 
-- `control.py`中的大部分代码参考自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)
 - `catalog.py`和`extract.py`中的代码参考自[Perfare/AssetStudio](https://github.com/Perfare/AssetStudio)
 
 感谢上述优秀的项目和创造或维护它们的个人或企业。
@@ -425,5 +399,8 @@ phisap 并没有对课题模式做特殊的支持，将来也许会有
 ### (2023/06/28) v0.1
 
 - 为 phisap 加入版本号，并设定初始版本号为 0.1
+  - **虽然phisap在2023/06/28才开始有的版本号，不过这是一个2021年就有的项目了**
+    - 实际上，phisap是从2020年开始开发的，不过当时并没有使用git进行版本管理
+      - （谁问你了）
 - 在 README 中加入更新日志
 - 修复此前遇到的一些问题
