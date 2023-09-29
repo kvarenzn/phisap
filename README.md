@@ -25,6 +25,8 @@ _phisap的图标由[@ShintoKosei](https://github.com/ShintoKosei)制作，授权
 
 本分支的更新仅在以下环境上测试过：PC OS: archlinux x64，游戏设备: OnePlus 7 Pro，氢OS 10.0.10.GM21
 
+## 贴条通知
++ (2023/09/29) 项目作者在将其手机刷机升级至Android 13（氢OS 10 -> crDroid 9.9）后，发现原本于Android 10下可以正常工作的OTG/HID后端完全报废，表现为通过AOAv2协议注册多点触控设备失败。scrcpy后端可以正常工作，暂未观察到异常。项目作者正在全力排查导致此问题的原因，并尝试修复。
 
 ## 目录
 
