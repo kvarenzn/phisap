@@ -165,16 +165,6 @@ phisap并没有对课题模式做特殊的支持，将来也许会有
 
 **如果一百度就能找到解决方法的问题，不要开issue，例如依赖安装问题，如果你开了也会被我关上甚至删除**
 
-## 对Arcaea的支持
-项目`闊靛緥婧愮偣/`文件夹下的文件实现了最简陋的对音游韵律源点（arcaea）的支持，原理完全相同。
-
-需要您手动提取谱面文件（比phigros简单，网上搜索一下就能找到），再运行`闊靛緥婧愮偣/main.py`，按照程序提示输入。
-
-支持的谱面声明包括：
-+ 函数：`arc()`、`arctap()`、`timing()`和`hold()`，`scenecontrol()`会被忽略
-+ easing：`b`、`s`、`si`、`so`、`sisi`、`soso`、`siso`和`sosi`
-+ 其余**均不支持**，尤其是对camera的操作
-
 ## 致谢
 + `control.py`中的大部分代码参考自[Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 。
 + `catalog.py`和`extract.py`中的代码参考自[Perfare/AssetStudio](https://github.com/Perfare/AssetStudio) 。
