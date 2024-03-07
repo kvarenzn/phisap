@@ -1,8 +1,0 @@
-/Assets/
-build/
-.gradle/
-.idea/
-server.jar
-cache
-scrcpy-server-*
-__pycache__/
